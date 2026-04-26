@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:DAWSON}",
+            "name": "Debug DAWSON",
+            "target": "DAWSON",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug DAWSON"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:DAWSON}",
+            "name": "Release DAWSON",
+            "target": "DAWSON",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release DAWSON"
+        }
+    ]
+}

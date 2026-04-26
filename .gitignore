@@ -1,0 +1,38 @@
+
+# Build artifacts (SwiftPM & Xcode)
+.build/*
+.swiftpm/*
+Packages/*
+*.build-debug.json
+.swiftpm/xcode/*
+
+# Xcode workspace & user data
+*.xcworkspace
+*.xcuserstate
+*.xcodeproj/project.xcworkspace/*
+*.xcodeproj/xcuserdata/*
+
+# Logs
+*.log
+
+# Temporary files
+*.swp
+*.DS_Store
+*~
+
+# Python specific
+python/*
+python/venv/*
+python/__pycache__/*
+python/pytest_cache/*
+
+# DAWSON specific (workspace root)
+workspace/*
+
+# MemPalace specific
+mempalace.yaml
+entities.json
+
+# Swift Playgrounds
+timeline.xctimeline
+playground.xcworkspace
