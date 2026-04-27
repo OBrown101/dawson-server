@@ -7,79 +7,99 @@
 
 import Foundation
 
-class Memory {
-    private var process: Process?
-    private var inputPipe: Pipe?
-    private var outputPipe: Pipe?
+final class Memory {
 
-    init(pythonPath: String = "python/venv/bin/python3") {
-        startProcess(pythonPath: pythonPath)
-    }
+    private let handler: PythonHandler?
+    
+    private let defaultPalacePath = "~/.mempalace/palace"
 
-    private func startProcess(pythonPath: String) {
-        process = Process()
-        inputPipe = Pipe()
-        outputPipe = Pipe()
-
-        process?.executableURL = URL(fileURLWithPath: pythonPath)
-        process?.arguments = ["mempalace/mempalace_wrapper.py"]
-
-        process?.standardInput = inputPipe
-        process?.standardOutput = outputPipe
-
+    init() {
         do {
-            try process?.run()
+            handler = try PythonHandler(script: "pythonHandlers/mempalace_handler.py")
         } catch {
-            print("Failed to start memory process:", error)
+            handler = nil
+            print("Could not initialise PythonHandler: \(error.localizedDescription)")
         }
+        
+        print(String(describing: getStatus()))
     }
 
-    private func send(_ payload: [String: Any]) async -> [String: Any]? {
-        guard let input = inputPipe,
-              let output = outputPipe else { return nil }
-
+    func getStatus() -> String? {
+        guard let handler else {
+            print("Python handler unavailable.")
+            return nil
+        }
+        
         do {
-            let data = try JSONSerialization.data(withJSONObject: payload)
-            if let jsonString = String(data: data, encoding: .utf8) {
-                input.fileHandleForWriting.write((jsonString + "\n").data(using: .utf8)!)
-            }
-
-            let responseData = try output.fileHandleForReading.read(upToCount: 4096)
-            guard let responseData = responseData,
-                  let json = try JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
-                return nil
-            }
-
-            return json
+            guard let wakeup = try handler.call(method: "status", params: [:]) else { return nil }
+            return (wakeup["text"] as? String)
         } catch {
-            print("MemoryBridge error:", error)
+            print("Status getting failed: \(error.localizedDescription)")
             return nil
         }
     }
-
-    func getContext(query: String) async -> [Message] {
-        let payload: [String: Any] = [
-            "action": "get_context",
-            "query": query
-        ]
-
-        guard let response = await send(payload),
-              let messages = response["messages"] as? [[String: String]] else {
-            return []
+    
+    func getWakeUp() -> String? {
+        guard let handler else {
+            print("Python handler unavailable.")
+            return nil
         }
-
-        return messages.map {
-            Message(role: $0["role"] ?? "system",
-                    text: $0["content"] ?? "")
+        
+        do {
+            guard let wakeup = try handler.call(method: "wake_up", params: [:]) else { return nil }
+            return (wakeup["text"] as? String)
+        } catch {
+            print("Wakeup getting failed: \(error.localizedDescription)")
+            return nil
         }
     }
+    
+    func search(query: String, wing: String? = nil, room: String? = nil, nResults: Int? = nil) -> [String: Any]? {
+        guard let handler else {
+            print("Python handler unavailable.")
+            return nil
+        }
 
-    func store(text: String) async {
-        let payload: [String: Any] = [
-            "action": "store",
-            "text": text
+        var params: [String: Any] = [
+            "params": [
+                "query": query,
+                "palace_path": defaultPalacePath
+            ]
         ]
 
-        _ = await send(payload)
+        if let nResults {
+            params["n_results"] = nResults
+        }
+        if let wing {
+            params["wing"] = wing
+        }
+        if let room {
+            params["room"] = room
+        }
+
+        do {
+            guard let result = try handler.call(method: "search_memories", params: params),
+                  (result["error"] == nil) else { return nil }
+            return result
+        } catch {
+            print("Memory search failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+    
+    func getContext(prompt: String) -> String? {
+        guard let searchResult = search(query: prompt),
+              let results = searchResult["results"] as? [[String: Any]] else { return nil }
+        
+        let formatted = results.compactMap { r -> String? in
+            guard let wing = r["wing"] as? String,
+                  let room = r["room"] as? String,
+                  let text = r["text"] as? String else {
+                return nil
+            }
+            return "[\(wing)/\(room)] \(text)"
+        }
+
+        return formatted.joined(separator: "\n")
     }
 }

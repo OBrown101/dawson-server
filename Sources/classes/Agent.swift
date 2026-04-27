@@ -59,6 +59,10 @@ class Agent {
         provider = Provider.provider(for: llmType)
     }
     
+    func getHistory() -> [Message] {
+        return history
+    }
+    
     func trimMessages(_ messages: [Message], recentWindow: Int = 50, keepSystemPrompt: Bool) -> [Message] {
         guard (!messages.isEmpty) else { return [] }
         
@@ -101,7 +105,7 @@ class Agent {
         while (iterations < maxIterations) {
             let keepSystemPrompt = ((systemPrompts != nil) && (iterations == 0))
             
-//            let memoryMessages = await memory.getContext(userPrompt: userPrompt, agentHistory: history)
+//            let memoryMessages = await memory.getContext(query: userPrompt)
 //            let memoryMessages: [Message] = await memory.getContext(query: userPrompt)
             let memoryMessages: [Message] = []
             let promptMessages = trimMessages((memoryMessages + newMessages), keepSystemPrompt: keepSystemPrompt)
@@ -134,9 +138,11 @@ class Agent {
             // Execute tools
             var toolResults: [Message] = []
             for tc in toolCalls {
+                print("Calling tool: \(tc.name)...")
                 onEvent?(.toolCall(tc.name), sessionUUID)
                 let result = await runTool(tc)
                 onEvent?(.toolResult(result), sessionUUID)
+                print("Tool result: \(result)")
                 
                 let tcResultMsg = Message(role: MsgSource.tool.name, text: ("Tool Usage Result: " + result))
                 toolResults.append(tcResultMsg)
@@ -146,8 +152,6 @@ class Agent {
         }
         
         history.append(contentsOf: newMessages)
-        let fullText = newMessages.compactMap { $0.text }.joined(separator: "\n")
-        await memory.store(text: fullText)
         return (nil, newMessages)
     }
 }

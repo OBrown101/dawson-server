@@ -15,8 +15,15 @@ class Loader {
         return content
     }
     
+    private static var sourceRoot: URL {
+        let fileURL = URL(fileURLWithPath: #file)
+        return fileURL.deletingLastPathComponent()
+                        .deletingLastPathComponent()
+                        .deletingLastPathComponent()
+    }
+    
     private func loadUser() -> String {
-        let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/workspace/config/USER.md")
+        let url = Loader.sourceRoot.appendingPathComponent("/workspace/config/USER.md")
         if let content = try? String(contentsOf: url) {
             return content
         }
@@ -25,7 +32,7 @@ class Loader {
     }
     
     private func loadAgents() -> String {
-        let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/workspace/config/AGENTS.md")
+        let url = Loader.sourceRoot.appendingPathComponent("/workspace/config/AGENTS.md")
         if let content = try? String(contentsOf: url) {
             return content
         }
@@ -34,7 +41,7 @@ class Loader {
     }
     
     private func loadPrimary() -> String {
-        let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/workspace/config/PRIMARY.md")
+        let url = Loader.sourceRoot.appendingPathComponent("/workspace/config/PRIMARY.md")
         if let content = try? String(contentsOf: url) {
             return content
         }
@@ -43,7 +50,7 @@ class Loader {
     }
     
     private func loadSoul() -> String {
-        let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/workspace/config/SOUL.md")
+        let url = Loader.sourceRoot.appendingPathComponent("/workspace/config/SOUL.md")
         if let content = try? String(contentsOf: url) {
             return content
         }
@@ -54,7 +61,7 @@ class Loader {
     private func loadSkillsSummary() -> String {
         var output = "## AVAILABLE SKILLS\n"
 
-        let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath + "/workspace/skills/")
+        let url = Loader.sourceRoot.appendingPathComponent("/workspace/skills/")
         guard let skillFolders = try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else {
             print("Failed to load SKILLS at: \(url.absoluteString)")
             return ""

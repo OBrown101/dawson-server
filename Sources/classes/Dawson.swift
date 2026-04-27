@@ -41,7 +41,8 @@ class DAWSON {
     func run(agentUUID: String, prompt: String, onEvent: ((_ event: AgentEvent, _ sessionUUID: String) -> Void)? = nil) async -> [Message] {
         guard let agent = activeAgents[agentUUID] else { return [] }
 
-        let (_, messages) = await agent.runAgent(userPrompt: prompt, onEvent: onEvent)
+        let systemPrompt = (agent.getHistory().isEmpty) ? Loader.shared.buildSystemContent() : nil
+        let (_, messages) = await agent.runAgent(userPrompt: prompt, systemPrompts: systemPrompt, onEvent: onEvent)
         return messages
     }
 }
