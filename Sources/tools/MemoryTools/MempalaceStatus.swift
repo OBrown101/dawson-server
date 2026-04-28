@@ -1,0 +1,31 @@
+//
+//  MempalaceOverview.swift
+//
+//
+//  Created by Ethan Brown on 4/27/26.
+//
+
+import Foundation
+
+class MempalaceStatus: Tool {
+    let name = "mempalace_status"
+    
+    func schema() -> [String: Any] {
+        return [
+            "type": "function",
+            "function": [
+                "name": name,
+                "description": "Palace overview — total drawers, wing and room counts",
+                "parameters": [
+                    "type": "object",
+                    "required": [],
+                    "properties": [:]
+                ]
+            ]
+        ]
+    }
+    
+    func execute(args: [String: Any]) -> String {
+        return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
+    }
+}

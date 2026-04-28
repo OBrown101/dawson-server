@@ -11,7 +11,7 @@ class Loader {
     static let shared = Loader()
     
     func buildSystemContent() -> [String] {
-        let content = [loadSoul(), loadPrimary(), loadUser(), loadAgents(), loadSkillsSummary()]
+        let content = [loadSoul(), loadMemory(), loadPrimary(), loadUser(), loadAgents(), loadSkillsSummary()]
         return content
     }
     
@@ -28,6 +28,15 @@ class Loader {
             return content
         }
         print("Failed to load USER.md at: \(url.absoluteString)")
+        return ""
+    }
+    
+    private func loadMemory() -> String {
+        let url = Loader.sourceRoot.appendingPathComponent("/workspace/config/MEMORY.md")
+        if let content = try? String(contentsOf: url) {
+            return content
+        }
+        print("Failed to load MEMORY.md at: \(url.absoluteString)")
         return ""
     }
     

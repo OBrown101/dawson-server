@@ -2,7 +2,6 @@ import Foundation
 
 class DAWSON {
     let server: WebSocketServer
-    let memory = Memory()
     
     let WORKSPACE = ("~/DAWSON/workspace" as NSString).expandingTildeInPath
 
@@ -18,7 +17,6 @@ class DAWSON {
             uuid: primaryAgentUUID,
             type: .primary,
             model: defaultModel,
-            memory: memory,
             maxMessages: defaultMaxMessage)
         
         server = WebSocketServer()
@@ -30,8 +28,12 @@ class DAWSON {
             uuid: uuid,
             type: type,
             model: model ?? defaultModel,
-            memory: memory,
-            maxMessages: defaultMaxMessage
+            maxMessages: defaultMaxMessage,
+            tools: [
+                WriteFile(), ReadFile(), Speak(), SpotifyTool(), SelfConfig(), FileSearch(),
+                AlertTool(), HTTPClientTool(), ProcessMonitor(), RichFormatter(), SQLDatabaseTool(),
+                JSONValidator(), SystemInfo(), TextSearch(), CSVParser()
+            ]   // These will change to support based on mode/settings
         )
         
         activeAgents[uuid] = newAgent

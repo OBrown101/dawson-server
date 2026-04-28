@@ -11,10 +11,6 @@ class PythonHandler {
     private let pythonPath: URL     // Full path to interpreter
     private let scriptPath: URL     // Full path to Python script
 
-    /// Optional environment dictionary.  By default the handler
-    /// augments the current process’s PATH so the venv’s `bin`
-    /// (or `Scripts`) directory is first.  That guarantees the
-    /// interpreter you launched is the one from the venv.
     private var env: [String: String]
     
     init(script: String, projectRoot: URL? = nil) throws {
@@ -52,7 +48,8 @@ class PythonHandler {
     
     private func run(input: [String: Any]) throws -> [String: Any] {
         let inputData = try JSONSerialization.data(withJSONObject: input, options: [])
-
+        print(inputData)
+        
         let process = Process()
         process.executableURL = pythonPath
         process.arguments = [scriptPath.path]
@@ -80,6 +77,7 @@ class PythonHandler {
 
         // Read JSON response from stdout
         let outputData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        print(String(describing: outputData))
         guard let outputDict = try JSONSerialization.jsonObject(with: outputData, options: []) as? [String: Any] else {
             throw NSError(domain: "PythonHandler", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to decode JSON from Python script output"])
         }
@@ -95,7 +93,9 @@ class PythonHandler {
         
         let result = try run(input: input)
         print(String(describing: result))
-        if (result["error"] != nil) { return nil }
+        if let error = result["error"] {
+            print("PYTHON ERROR:", error)
+        }
 
         return result["result"] as? [String: Any]
     }

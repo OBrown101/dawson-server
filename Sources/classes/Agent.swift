@@ -27,34 +27,41 @@ class Agent {
     let llmType: LLMClient.LLMType
     let type: AgentType
     let model: String
-    let memory: Memory
     let maxIterations: Int
     var maxMessages: Int
     var history: [Message]
     var tools: [Tool]
 
     var provider: LLMProvider
+    
+    static var requiredTools: [Tool] {
+        return [
+            MempalaceAddDrawer(), MempalaceCheckDuplicate(), MempalaceDeleteDrawer(), MempalaceDiaryRead(),
+            MempalaceDiaryWrite(), MempalaceGetAAAKSpec(), MempalaceGraphStats(), MempalaceKgAdd(),
+            MempalaceKgInvalidate(), MempalaceKgQuery(), MempalaceKgStats(), MempalaceKgTimeline(),
+            MempalaceListRooms(), MempalaceListWings(), MempalaceSearch(),
+            MempalaceStatus(), MempalaceTraverse(), EnvAwareness()
+        ]
+    }
 
     init(
         uuid: String,
         llmType: LLMClient.LLMType = .ollama,
         type: AgentType,
         model: String,
-        memory: Memory,
-        maxIterations: Int = 5,
-        maxMessages: Int = 20,
+        maxIterations: Int = 12,
+        maxMessages: Int = 40,
         history: [Message] = [],
-        tools: [Tool] = [WriteFile(), ReadFile(), Speak(), SpotifyTool(), SelfConfig(), FileSearch(), AlertTool(), HTTPClientTool(), ProcessMonitor(), RichFormatter(), SQLDatabaseTool(), JSONValidator(), SystemInfo(), TextSearch(), CSVParser()]
+        tools: [Tool] = []
     ) {
         self.uuid = uuid
         self.llmType = llmType
         self.type = type
         self.model = model
-        self.memory = memory
         self.maxIterations = maxIterations
         self.maxMessages = maxMessages
         self.history = history
-        self.tools = tools
+        self.tools = (Agent.requiredTools + tools)
 
         provider = Provider.provider(for: llmType)
     }
@@ -105,8 +112,6 @@ class Agent {
         while (iterations < maxIterations) {
             let keepSystemPrompt = ((systemPrompts != nil) && (iterations == 0))
             
-//            let memoryMessages = await memory.getContext(query: userPrompt)
-//            let memoryMessages: [Message] = await memory.getContext(query: userPrompt)
             let memoryMessages: [Message] = []
             let promptMessages = trimMessages((memoryMessages + newMessages), keepSystemPrompt: keepSystemPrompt)
             

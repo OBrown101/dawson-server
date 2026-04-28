@@ -8,6 +8,8 @@ class PythonHandler(ABC):
         try:
             input_data = self.read_input()
 
+            self.write_output({"debug": "step1"})
+
             method_name = input_data.get("method")
             params = input_data.get("params", {})
 
@@ -21,6 +23,8 @@ class PythonHandler(ABC):
 
             if not callable(method):
                 raise ValueError(f"Method not callable: {method_name}")
+
+            self.write_output({"debug": "step2"})
 
             result = method(params)
 
