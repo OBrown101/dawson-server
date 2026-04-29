@@ -7,96 +7,86 @@
 
 import Foundation
 
+
+import PythonKit
+
 class PythonHandler {
-    private let pythonPath: URL     // Full path to interpreter
-    private let scriptPath: URL     // Full path to Python script
-
-    private var env: [String: String]
+    static let shared = PythonHandler()
     
-    init(script: String, projectRoot: URL? = nil) throws {
-        let root = projectRoot ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    private var sys: PythonObject?
+    
+    private init() {}
+    
+    private func ensurePython() {
+        if (sys != nil) { return }
 
-        #if os(Windows)
-        self.pythonPath = root      // python/Scripts/python.exe
-            .appendingPathComponent("python")
-            .appendingPathComponent("Scripts")
-            .appendingPathComponent("python.exe")
-        #else
-        self.pythonPath = root      // python/venv/bin/python3
-            .appendingPathComponent("python")
-            .appendingPathComponent("venv")
-            .appendingPathComponent("bin")
-            .appendingPathComponent("python3")
-        #endif
-        
-        guard FileManager.default.fileExists(atPath: pythonPath.path) else {
-            throw NSError(domain: "PythonHandler", code: 1, userInfo: [NSLocalizedDescriptionKey: "Python interpreter not found at \(pythonPath.path)"])
-        }
+        let sysModule = Python.import("sys")
 
-        scriptPath = root.appendingPathComponent(script)
+        let projectRoot = FileManager.default.currentDirectoryPath
 
-        guard FileManager.default.fileExists(atPath: scriptPath.path) else {
-            throw NSError(domain: "PythonHandler", code: 2, userInfo: [NSLocalizedDescriptionKey: "Python script not found at \(scriptPath.path)"])
-        }
+        sysModule.path.append(projectRoot + "/python")
+        sysModule.path.append(projectRoot + "/python/venv/lib/python3.11/site-packages")
 
-        // Augment PATH so the venv’s bin/Scripts dir is first.
-        var environment = ProcessInfo.processInfo.environment
-        let venvBin = pythonPath.deletingLastPathComponent().path
-        environment["PATH"] = "\(venvBin):\(environment["PATH"] ?? "")"
-        self.env = environment
+        sys = sysModule
     }
     
-    private func run(input: [String: Any]) throws -> [String: Any] {
-        let inputData = try JSONSerialization.data(withJSONObject: input, options: [])
-        print(inputData)
+    func call(module: String, function: String, args: [String: Any] = [:]) -> PythonObject {
+        ensurePython()
         
-        let process = Process()
-        process.executableURL = pythonPath
-        process.arguments = [scriptPath.path]
-        process.environment = env
+        let pyModule = Python.import(module)
+        let pyArgs = convertToPython(args)
+        let fn = pyModule.__getattribute__(function)
 
-        let stdinPipe = Pipe()
-        let stdoutPipe = Pipe()
-        process.standardInput = stdinPipe
-        process.standardOutput = stdoutPipe
-        process.standardError = Pipe()
-
-        try process.run()
-
-        // Write JSON payload to the script’s stdin
-        stdinPipe.fileHandleForWriting.write(inputData)
-        stdinPipe.fileHandleForWriting.closeFile()
-
-        // Wait for the process to finish
-        process.waitUntilExit()
-        if (process.terminationStatus != 0) {
-            let errData = (process.standardError as! Pipe).fileHandleForReading.readDataToEndOfFile()
-            let errString = String(data: errData, encoding: .utf8) ?? "unknown error"
-            throw NSError(domain: "PythonHandler", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "Python script failed: \(errString)"])
-        }
-
-        // Read JSON response from stdout
-        let outputData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        print(String(describing: outputData))
-        guard let outputDict = try JSONSerialization.jsonObject(with: outputData, options: []) as? [String: Any] else {
-            throw NSError(domain: "PythonHandler", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to decode JSON from Python script output"])
-        }
-
-        return outputDict
+        return fn(pyArgs)
     }
     
-    func call(method: String, params: [String: Any]) throws -> [String: Any]? {
-        let input: [String: Any] = [
-            "method": method,
-            "params": params
-        ]
-        
-        let result = try run(input: input)
-        print(String(describing: result))
-        if let error = result["error"] {
-            print("PYTHON ERROR:", error)
+    func convertToPython(_ dict: [String: Any]) -> PythonObject {
+        var pyDict = Python.dict()
+
+        for (key, value) in dict {
+            pyDict[key] = toPython(value)
         }
 
-        return result["result"] as? [String: Any]
+        return pyDict
+    }
+
+    func toPython(_ value: Any) -> PythonObject {
+        switch value {
+        case let v as String:
+            return Python.str(v)
+        case let v as Int:
+            return Python.int(v)
+        case let v as Double:
+            return Python.float(v)
+        case let v as Bool:
+            return Python.bool(v)
+        case let v as [String: Any]:
+            return convertToPython(v)
+        case let v as [Any]:
+            return Python.list(v.map { toPython($0) })
+        default:
+            return Python.str("\(value)")
+        }
+    }
+    
+    func fromPython(_ obj: PythonObject) -> Any {
+        if let dict = Dictionary<String, PythonObject>(obj) {
+            var result: [String: Any] = [:]
+            for (k, v) in dict {
+                result[k] = fromPython(v)
+            }
+            return result
+        }
+
+        if let array = [PythonObject](obj) {
+            return array.map { fromPython($0) }
+        }
+
+        if let string = String(obj) { return string }
+        if let int = Int(obj) { return int }
+        if let double = Double(obj) { return double }
+        if let bool = Bool(obj) { return bool }
+
+        return String(describing: obj)
     }
 }

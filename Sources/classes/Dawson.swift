@@ -13,14 +13,10 @@ class DAWSON {
     var activeAgents: [String: Agent] = [:]
 
     init() {
-        activeAgents[primaryAgentUUID] = Agent(
-            uuid: primaryAgentUUID,
-            type: .primary,
-            model: defaultModel,
-            maxMessages: defaultMaxMessage)
-        
         server = WebSocketServer()
         server.dawson = self
+        
+        let _ = spawnAgent(uuid: primaryAgentUUID, type: .primary, model: defaultModel)     // Sets up primary Dawson agent
     }
     
     func spawnAgent(uuid: String, type: AgentType, model: String? = nil) -> Agent {

@@ -11,6 +11,10 @@ import Vapor
 let app = try await Application.make(.development)
 defer { app.shutdown() }
 
+let projectRoot = FileManager.default.currentDirectoryPath
+let pythonLib = (projectRoot + "/python/python3/3.11/lib/libpython3.11.dylib")
+setenv("PYTHON_LIBRARY", pythonLib, 1)
+
 let dawson = DAWSON()
 
 app.http.server.configuration.hostname = "0.0.0.0"

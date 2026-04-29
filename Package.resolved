@@ -46,6 +46,15 @@
       }
     },
     {
+      "identity" : "pythonkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pvieito/PythonKit.git",
+      "state" : {
+        "branch" : "master",
+        "revision" : "d030b5193d1e4e770156deb27865773b64c5695f"
+      }
+    },
+    {
       "identity" : "routing-kit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vapor/routing-kit.git",

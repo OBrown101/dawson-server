@@ -11,7 +11,8 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/Flight-School/AnyCodable", .upToNextMajor(from: "0.6.7")),
         .package(url: "https://github.com/stephencelis/SQLite.swift", .upToNextMajor(from: "0.14.1")),
-        .package(url: "https://github.com/vapor/vapor.git", from: "4.76.0")
+        .package(url: "https://github.com/vapor/vapor.git", from: "4.76.0"),
+        .package(url: "https://github.com/pvieito/PythonKit.git", branch: "master")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -22,7 +23,8 @@ let package = Package(
                 // Link AnyCodable to your target
                 .product(name: "AnyCodable", package: "AnyCodable"),
                 .product(name: "SQLite", package: "SQLite.swift"),
-                .product(name: "Vapor", package: "vapor")
+                .product(name: "Vapor", package: "vapor"),
+                .product(name: "PythonKit", package: "pythonkit")
             ],
             path: "Sources"
         ),
