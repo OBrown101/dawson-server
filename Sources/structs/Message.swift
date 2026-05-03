@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct Message {
+struct Message: Codable {
     let createdAt: Date
     let model: String
     let role: String

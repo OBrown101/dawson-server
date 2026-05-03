@@ -10,82 +10,115 @@ import Foundation
 
 import PythonKit
 
+enum PythonHandlerError: Error {
+    case moduleNotFound(String)
+    case functionNotFound(String)
+    case invalidArgumentType(String)
+    case pythonExecutionFailed(String)
+}
+
 class PythonHandler {
     static let shared = PythonHandler()
     
     private var sys: PythonObject?
+    private let queue = DispatchQueue(label: "python.handler.queue")
     
     private init() {}
     
-    private func ensurePython() {
+    private func ensurePython() throws {
         if (sys != nil) { return }
-
-        let sysModule = Python.import("sys")
-
+        
+        let sysModule = try Python.attemptImport("sys")
         let projectRoot = FileManager.default.currentDirectoryPath
-
-        sysModule.path.append(projectRoot + "/python")
-        sysModule.path.append(projectRoot + "/python/venv/lib/python3.11/site-packages")
-
+        
+        let pythonPaths = [
+            "\(projectRoot)/python",
+            "\(projectRoot)/python/venv/lib/python3.11/site-packages"
+        ]
+        for path in pythonPaths {
+            sysModule.path.append(path)
+        }
+        
         sys = sysModule
     }
     
-    func call(module: String, function: String, args: [String: Any] = [:]) -> PythonObject {
-        ensurePython()
-        
-        let pyModule = Python.import(module)
-        let pyArgs = convertToPython(args)
-        let fn = pyModule.__getattribute__(function)
-
-        return fn(pyArgs)
+    func call(moduleName: String, functionName: String, args: [String: Any] = [:]) throws -> PythonObject {
+        return try queue.sync {
+            try ensurePython()
+            
+            let module: PythonObject
+            do {
+                module = try Python.attemptImport(moduleName)
+            } catch {
+                throw PythonHandlerError.moduleNotFound(moduleName)
+            }
+            
+            let args = try toPython(args)
+            
+            guard let function = module.checking[dynamicMember: functionName] else {
+                throw PythonHandlerError.functionNotFound(functionName)
+            }
+            let result = try function.throwing.dynamicallyCall(withArguments: args)
+            
+            // Detect Python-side exceptions
+            let builtins = try Python.attemptImport("builtins")
+            if Bool(builtins.isinstance(result, builtins.BaseException)) == true {
+                throw PythonHandlerError.pythonExecutionFailed(String(describing: result))
+            }
+            
+            return result
+        }
     }
     
-    func convertToPython(_ dict: [String: Any]) -> PythonObject {
-        var pyDict = Python.dict()
-
+    private func convertDictionary(_ dict: [String: Any]) throws -> [String: PythonObject] {
+        var converted: [String: PythonObject] = [:]
         for (key, value) in dict {
-            pyDict[key] = toPython(value)
+            converted[key] = try toPython(value)
         }
 
-        return pyDict
+        return converted
     }
 
-    func toPython(_ value: Any) -> PythonObject {
+    private func toPython(_ value: Any) throws -> PythonObject {
         switch value {
-        case let v as String:
-            return Python.str(v)
-        case let v as Int:
-            return Python.int(v)
-        case let v as Double:
-            return Python.float(v)
-        case let v as Bool:
-            return Python.bool(v)
-        case let v as [String: Any]:
-            return convertToPython(v)
-        case let v as [Any]:
-            return Python.list(v.map { toPython($0) })
+        case let v as String:        return PythonObject(v)
+        case let v as Int:           return PythonObject(v)
+        case let v as Double:        return PythonObject(v)
+        case let v as Float:         return PythonObject(Double(v))
+        case let v as Bool:          return PythonObject(v)
+        case let v as [String: Any]: return PythonObject(try convertDictionary(v))
+        case let v as [Any]:         return PythonObject(try v.map { try toPython($0) })
+        case let v as [String]:      return PythonObject(v)
+        case let v as [Int]:         return PythonObject(v)
+        case let v as [Double]:      return PythonObject(v)
+        case is NSNull:              return Python.None
         default:
-            return Python.str("\(value)")
+            throw PythonHandlerError.invalidArgumentType("Unsupported type for \(type(of: value))")
         }
     }
     
     func fromPython(_ obj: PythonObject) -> Any {
         if let dict = Dictionary<String, PythonObject>(obj) {
             var result: [String: Any] = [:]
-            for (k, v) in dict {
-                result[k] = fromPython(v)
+            for (key, value) in dict {
+                result[key] = fromPython(value)
             }
+
             return result
         }
 
-        if let array = [PythonObject](obj) {
+        if let array = Array<PythonObject>(obj) {
             return array.map { fromPython($0) }
         }
 
-        if let string = String(obj) { return string }
+        if let bool = Bool(obj) { return bool }
         if let int = Int(obj) { return int }
         if let double = Double(obj) { return double }
-        if let bool = Bool(obj) { return bool }
+        if let string = String(obj) { return string }
+
+        if (String(describing: obj) == "None") {
+            return NSNull()
+        }
 
         return String(describing: obj)
     }

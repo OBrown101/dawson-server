@@ -10,136 +10,19 @@ import Foundation
 class Loader {
     static let shared = Loader()
     
-    func buildSystemContent() -> [String] {
-        let content = [loadSoul(), loadMemory(), loadPrimary(), loadUser(), loadAgents(), loadSkillsSummary()]
-        return content
+    func buildBaseSystemPrompt(agent: AgentType) -> String {
+        let soul = loadAgentSoul(agent)
+        let memorySchema = MempalaceMemory.shared.getStatus()
+        return (soul + "/n" + memorySchema)
     }
     
-    private static var sourceRoot: URL {
-        let fileURL = URL(fileURLWithPath: #file)
-        return fileURL.deletingLastPathComponent()
-                        .deletingLastPathComponent()
-                        .deletingLastPathComponent()
-    }
-    
-    private func loadUser() -> String {
-        let url = Loader.sourceRoot.appendingPathComponent("/workspace/config/USER.md")
+    func loadAgentSoul(_ agent: AgentType) -> String {
+        let projectRoot = FileManager.default.currentDirectoryPath
+        let url = URL(fileURLWithPath: projectRoot + agent.soulPath)
         if let content = try? String(contentsOf: url) {
             return content
         }
-        print("Failed to load USER.md at: \(url.absoluteString)")
-        return ""
-    }
-    
-    private func loadMemory() -> String {
-        let url = Loader.sourceRoot.appendingPathComponent("/workspace/config/MEMORY.md")
-        if let content = try? String(contentsOf: url) {
-            return content
-        }
-        print("Failed to load MEMORY.md at: \(url.absoluteString)")
-        return ""
-    }
-    
-    private func loadAgents() -> String {
-        let url = Loader.sourceRoot.appendingPathComponent("/workspace/config/AGENTS.md")
-        if let content = try? String(contentsOf: url) {
-            return content
-        }
-        print("Failed to load AGENTS.md at: \(url.absoluteString)")
-        return ""
-    }
-    
-    private func loadPrimary() -> String {
-        let url = Loader.sourceRoot.appendingPathComponent("/workspace/config/PRIMARY.md")
-        if let content = try? String(contentsOf: url) {
-            return content
-        }
-        print("Failed to load PRIMARY.md at: \(url.absoluteString)")
-        return ""
-    }
-    
-    private func loadSoul() -> String {
-        let url = Loader.sourceRoot.appendingPathComponent("/workspace/config/SOUL.md")
-        if let content = try? String(contentsOf: url) {
-            return content
-        }
-        print("Failed to load SOUL.md at: \(url.absoluteString)")
-        return ""
-    }
-    
-    private func loadSkillsSummary() -> String {
-        var output = "## AVAILABLE SKILLS\n"
-
-        let url = Loader.sourceRoot.appendingPathComponent("/workspace/skills/")
-        guard let skillFolders = try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else {
-            print("Failed to load SKILLS at: \(url.absoluteString)")
-            return ""
-        }
-
-        let fileManager = FileManager.default
-        for folder in skillFolders {
-            var isDir: ObjCBool = false
-            if fileManager.fileExists(atPath: folder.path, isDirectory: &isDir), isDir.boolValue {
-                
-                let skillFile = folder.appendingPathComponent("skill.md")
-                
-                guard fileManager.fileExists(atPath: skillFile.path),
-                      let content = try? String(contentsOf: skillFile) else { continue }
-                
-                let parsed = parseSkillFile(content)
-                
-                output += """
-                
-                ### \(parsed.name)
-                - Purpose: \(parsed.purpose)
-                - Example: \(parsed.example)
-                
-                """
-            }
-        }
-
-        return output
-    }
-    
-    private func parseSkillFile(_ content: String) -> (name: String, purpose: String, example: String) {
-        let lines = content.components(separatedBy: .newlines)
-        
-        var name = "Unknown Skill"
-        var purpose = ""
-        var example = ""
-        
-        var currentSection: String? = nil
-        
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            
-            // Skill name
-            if trimmed.hasPrefix("# ") {
-                name = trimmed.replacingOccurrences(of: "# ", with: "")
-            }
-            
-            // Section detection
-            if trimmed.lowercased().contains("**purpose**") {
-                currentSection = "purpose"
-                continue
-            }
-            if trimmed.lowercased().contains("**example usage**") {
-                currentSection = "example"
-                continue
-            }
-            
-            // Capture content
-            if let section = currentSection {
-                if trimmed.hasPrefix("**") { continue } // skip new headers
-                
-                if section == "purpose" {
-                    purpose += (trimmed + " ")
-                } else if section == "example" {
-                    example += (trimmed + " ")
-                }
-            }
-        }
-        
-        return (name, purpose.trimmingCharacters(in: .whitespaces), example.trimmingCharacters(in: .whitespaces))
+        print("Failed to load agent's soul at: \(url.absoluteString)")
+        return "Failed to load the agent's soul/identity. Tell user about the issue and ask for help."
     }
 }

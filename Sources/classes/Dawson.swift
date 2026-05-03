@@ -3,7 +3,8 @@ import Foundation
 class DAWSON {
     let server: WebSocketServer
     
-    let WORKSPACE = ("~/DAWSON/workspace" as NSString).expandingTildeInPath
+    static let root = FileManager.default.currentDirectoryPath
+    static let workspace = (root + "/workspace" as NSString).expandingTildeInPath
 
     let firstUserPrompt = "Hello, wake up and be ready to take commands."
     let defaultMaxMessage = 20
@@ -16,7 +17,7 @@ class DAWSON {
         server = WebSocketServer()
         server.dawson = self
         
-        let _ = spawnAgent(uuid: primaryAgentUUID, type: .primary, model: defaultModel)     // Sets up primary Dawson agent
+        let _ = spawnAgent(uuid: primaryAgentUUID, type: .dawson, model: defaultModel)     // Sets up primary Dawson agent
     }
     
     func spawnAgent(uuid: String, type: AgentType, model: String? = nil) -> Agent {
@@ -26,9 +27,8 @@ class DAWSON {
             model: model ?? defaultModel,
             maxMessages: defaultMaxMessage,
             tools: [
-                WriteFile(), ReadFile(), Speak(), SpotifyTool(), SelfConfig(), FileSearch(),
-                AlertTool(), HTTPClientTool(), ProcessMonitor(), RichFormatter(), SQLDatabaseTool(),
-                JSONValidator(), SystemInfo(), TextSearch(), CSVParser()
+                WriteFile(), ReadFile(), Speak(), SelfConfig(), FileSearch(),
+                RichFormatter(), TextSearch()
             ]   // These will change to support based on mode/settings
         )
         
@@ -39,8 +39,8 @@ class DAWSON {
     func run(agentUUID: String, prompt: String, onEvent: ((_ event: AgentEvent, _ sessionUUID: String) -> Void)? = nil) async -> [Message] {
         guard let agent = activeAgents[agentUUID] else { return [] }
 
-        let systemPrompt = (agent.getHistory().isEmpty) ? Loader.shared.buildSystemContent() : nil
-        let (_, messages) = await agent.runAgent(userPrompt: prompt, systemPrompts: systemPrompt, onEvent: onEvent)
+        let systemPrompt = Loader.shared.buildBaseSystemPrompt(agent: agent.type)
+        let (_, messages) = await agent.runAgent(userPrompt: prompt, systemPrompt: systemPrompt, onEvent: onEvent)
         return messages
     }
 }

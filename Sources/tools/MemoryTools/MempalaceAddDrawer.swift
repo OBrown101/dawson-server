@@ -38,7 +38,7 @@ class MempalaceAddDrawer: Tool {
                         ],
                         "added_by": [
                             "type": "string",
-                            "description": "Who is filing this (default: mcp)"
+                            "description": "Who is filing this (default: should be the agent's name who is filing it)"
                         ]
                     ]
                 ]

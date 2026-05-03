@@ -15,7 +15,7 @@ class EnvAwareness: Tool {
             "type": "function",
             "function": [
                 "name": name,
-                "description": "Provides the agent with current situational/environmental awareness data such as time, date, day of week, timezone, operating system, user, and system uptime.",
+                "description": "Provides agent with current environmental awareness data such as time/date, timezone, operating system, DAWSON project root and workspace directories, etc.",
                 "parameters": [
                     "type": "object",
                     "required": [],
@@ -26,44 +26,44 @@ class EnvAwareness: Tool {
     }
 
     func execute(args: [String: Any]) -> String {
-        // Current date & time
         let now = Date()
         let formatter = DateFormatter()
         formatter.dateStyle = .full
         formatter.timeStyle = .full
         formatter.timeZone = TimeZone.current
+        
         let dateString = formatter.string(from: now)
-
-        // Time zone
-        let tzName = TimeZone.current.identifier
-
-        // Day of week
-        formatter.dateFormat = "EEEE"
-        let dayOfWeek = formatter.string(from: now)
-
-        // Operating system
-        let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
-
-        // Current user
+        let timezoneName = TimeZone.current.identifier
         let user = NSUserName()
+        let osInfo = getOSInfo()
 
-        // System uptime (seconds)
-        let uptimeSeconds = ProcessInfo.processInfo.systemUptime
-        let uptimeFormatter = DateComponentsFormatter()
-        uptimeFormatter.allowedUnits = [.day, .hour, .minute, .second]
-        uptimeFormatter.unitsStyle = .full
-        let uptimeString = uptimeFormatter.string(from: uptimeSeconds) ?? "unknown"
-
-        // Assemble response
         let info = """
-        Current date & time: \(dateString)
-        Time zone: \(tzName)
-        Day of week: \(dayOfWeek)
-        Operating system: \(osVersion)
-        Current user: \(user)
-        System uptime: \(uptimeString)
+        Date & time: \(dateString)
+        Time zone: \(timezoneName)
+        Current Host Computer info: \(getOSInfo())
+        Current Host Computer user: \(user)
+        DAWSON program root directory: \(DAWSON.root)
+        DAWSON workspace directory: \(DAWSON.workspace)
         """
 
         return info
+    }
+    
+    private func getOSInfo() -> String {
+        let processInfo = ProcessInfo.processInfo
+        #if os(macOS)
+        return "macOS (version: \(processInfo.operatingSystemVersionString))"
+        #elseif os(Linux)
+        // Try common Linux version files
+        var linuxVersion = "Linux (unknown distribution)"
+        if let osRelease = try? String(contentsOfFile: "/etc/os-release", encoding: .utf8) {
+            linuxVersion = "Linux - " + (osRelease.components(separatedBy: .newlines).first { $0.hasPrefix("PRETTY_NAME") } ?? "Unknown")
+        }
+        return "\(linuxVersion) (kernel: \(processInfo.operatingSystemVersionString)"
+        #elseif os(Windows)
+        return "Windows (version: \(processInfo.operatingSystemVersionString))"
+        #else
+        return "Unknown Platform"
+        #endif
     }
 }

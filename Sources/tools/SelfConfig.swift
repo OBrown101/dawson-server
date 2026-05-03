@@ -10,12 +10,6 @@ import Foundation
 class SelfConfig: Tool {
     let name = "self_config"
 
-    let configPath: String
-
-    init(configPath: String = ("~/DAWSON/workspace/config.json" as NSString).expandingTildeInPath) {
-        self.configPath = configPath
-    }
-
     func schema() -> [String: Any] {
         return [
             "type": "function",
@@ -41,16 +35,15 @@ class SelfConfig: Tool {
     }
 
     func execute(args: [String: Any]) -> String {
-        let fileURL = URL(fileURLWithPath: configPath)
+        let projectRoot = FileManager.default.currentDirectoryPath
+        let url = URL(fileURLWithPath: projectRoot + "/workspace/config.json")
 
-        // Read existing config
         var currentConfig: [String: Any] = [:]
-        if let data = try? Data(contentsOf: fileURL),
+        if let data = try? Data(contentsOf: url),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             currentConfig = json
         }
 
-        // Return config if requested
         if let read = args["read"] as? Bool, read {
             if let jsonData = try? JSONSerialization.data(withJSONObject: currentConfig, options: .prettyPrinted),
                let jsonStr = String(data: jsonData, encoding: .utf8) {
@@ -66,7 +59,7 @@ class SelfConfig: Tool {
             }
             do {
                 let jsonData = try JSONSerialization.data(withJSONObject: currentConfig, options: .prettyPrinted)
-                try jsonData.write(to: fileURL)
+                try jsonData.write(to: url)
                 return "Config updated successfully."
             } catch {
                 return "Error updating config: \(error.localizedDescription)"

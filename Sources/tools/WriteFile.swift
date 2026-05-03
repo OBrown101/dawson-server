@@ -15,7 +15,7 @@ class WriteFile: Tool {
             "type": "function",
             "function": [
                 "name": name,
-                "description": "Writes content to a file at the specified path. Overwrites existing content if the file exists.. Used for writing to any file, including your SOUL, MEMORY, etc. config files.",
+                "description": "Writes content to a file at the specified path. Overwrites existing content if the file exists. Used for writing to any file.",
                 "parameters": [
                     "type": "object",
                     "required": ["path", "content"],

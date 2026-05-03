@@ -22,11 +22,11 @@ class MempalaceDiaryRead: Tool {
                     "properties": [
                         "agent_name": [
                             "type": "string",
-                            "description": "Your name — each agent gets their own diary wing"
+                            "description": "The agent's internal name — each agent gets their own diary wing"
                         ],
                         "last_n": [
                             "type": "integer",
-                            "description": "Number of recent entries to read (default: 10)"
+                            "description": "Number of recent entries to read (use 10 as default if unsure)"
                         ]
                     ]
                 ]
