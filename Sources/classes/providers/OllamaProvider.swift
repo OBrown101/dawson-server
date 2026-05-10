@@ -28,6 +28,7 @@ class OllamaProvider: LLMProvider {
         
         if (!tools.isEmpty) {
             payload["tools"] = tools.map { $0.schema() }
+            payload["tool_choice"] = "auto"
         }
         
         do {

@@ -11,8 +11,6 @@ import PythonKit
 class MempalaceMemory {
     static let shared = MempalaceMemory()
     
-    let scriptPath = "pythonHandlers/mempalace_handler.py"
-    
     func mempalaceExec(name: String, args: [String: Any]) -> String {
         let mcpPayload: [String: Any] = [
             "method": "tools/call",

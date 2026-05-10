@@ -12,7 +12,7 @@ class Loader {
     
     func buildBaseSystemPrompt(agent: AgentType) -> String {
         let soul = loadAgentSoul(agent)
-        let memorySchema = MempalaceMemory.shared.getStatus()
+        let memorySchema = ("## YOUR MEMORY SETUP ##\n" + MempalaceMemory.shared.getStatus())
         return (soul + "/n" + memorySchema)
     }
     
