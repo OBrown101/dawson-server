@@ -30,7 +30,7 @@ class Shell: Tool {
         ]
     }
 
-    func execute(args: [String: Any]) -> String {
+    func execute(args: [String: Any]) async -> String {
         guard let command = args["command"] as? String, !command.isEmpty else {
             return "Error: No command provided."
         }

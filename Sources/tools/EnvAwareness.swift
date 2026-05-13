@@ -25,7 +25,7 @@ class EnvAwareness: Tool {
         ]
     }
 
-    func execute(args: [String: Any]) -> String {
+    func execute(args: [String: Any]) async -> String {
         let now = Date()
         let formatter = DateFormatter()
         formatter.dateStyle = .full

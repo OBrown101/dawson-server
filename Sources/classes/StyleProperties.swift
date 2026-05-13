@@ -7,7 +7,7 @@
 
 import Foundation
 
-class StyleProperties {
+class StyleProperties: @unchecked Sendable {
     static let shared = StyleProperties()
     
     enum Color {

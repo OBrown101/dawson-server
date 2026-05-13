@@ -34,7 +34,7 @@ class FileSearch: Tool {
         ]
     }
     
-    func execute(args: [String: Any]) -> String {
+    func execute(args: [String: Any]) async -> String {
         guard let filename = args["filename"] as? String,
               let path = args["path"] as? String else {
             return "Error: Missing filename or path."

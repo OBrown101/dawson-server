@@ -15,7 +15,7 @@ enum ConfigKey: String, CaseIterable {
     case userMessageTerm
 }
 
-class Config {
+class Config: @unchecked Sendable {
     static let shared = Config()
 
     private let configPath: String

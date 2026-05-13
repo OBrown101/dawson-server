@@ -40,7 +40,7 @@ class RunPythonScript: Tool {
         ]
     }
 
-    func execute(args: [String: Any]) -> String {
+    func execute(args: [String: Any]) async -> String {
         guard let module = args["module"] as? String,
               let function = args["function"] as? String else {
             return "Error: Missing required parameters 'module' or 'function'"

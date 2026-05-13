@@ -7,11 +7,46 @@
 
 import Foundation
 import PythonKit
+import MCP
+import System
 
-class MempalaceMemory {
+
+class MempalaceMemory: @unchecked Sendable {
     static let shared = MempalaceMemory()
     
-    func mempalaceExec(name: String, args: [String: Any]) -> String {
+    static private let projectRoot = FileManager.default.currentDirectoryPath
+    let palacePath = "\(projectRoot)/.mempalace"
+    
+    
+    func initMCP() {
+        Task {
+            do {
+                try await MCPHandler.shared.registerServer(serverName: "mempalace") {
+                    let inputPipe = Pipe()
+                    let outputPipe = Pipe()
+                    let errorPipe = Pipe()
+                    
+                    _ = try PythonHandler.shared.startPythonProcess(
+                        scriptPath: "\(PythonEnv.pythonPackagesPath)/mempalace/mcp_server.py",
+                        arguments: ["--palace \(self.palacePath)"],
+                        inputPipe: inputPipe,
+                        outputPipe: outputPipe,
+                        errorPipe: errorPipe
+                    )
+                    
+                    return StdioTransport(
+                        input: FileDescriptor(rawValue: inputPipe.fileHandleForReading.fileDescriptor),
+                        output: FileDescriptor(rawValue: outputPipe.fileHandleForWriting.fileDescriptor)
+                    )
+                }
+            } catch {
+                print("MempalaceMCP init failed: \(error)")
+            }
+        }
+    }
+    
+    
+     func mempalaceExec(name: String, args: [String: Any]) -> String {
         let mcpPayload: [String: Any] = [
             "method": "tools/call",
             "id": UUID().uuidString,
@@ -69,4 +104,5 @@ class MempalaceMemory {
         
         return ("Memory retrieved based on user's prompt: ##\(context)##")
     }
+     
 }

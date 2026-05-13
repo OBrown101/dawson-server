@@ -7,7 +7,7 @@
 
 import Foundation
 
-class LLMClient {
+final class LLMClient: Sendable {
     static let shared = LLMClient()
     
     enum LLMType {
@@ -21,8 +21,17 @@ class LLMClient {
         }
     }
     
-    func streamJSON(llmType: LLMType, payload: [String: Any]) -> AsyncThrowingStream<[String: Any], Error> {
-        AsyncThrowingStream { continuation in
+    func streamJSON(llmType: LLMType, payload: [String: Any]) -> AsyncThrowingStream<Data, Error> {
+        let payloadData: Data
+        do {
+            payloadData = try JSONSerialization.data(withJSONObject: payload)
+        } catch {
+            return AsyncThrowingStream { @Sendable continuation in
+                continuation.finish(throwing: error)
+            }
+        }
+        
+        return AsyncThrowingStream { @Sendable continuation in
             let task = Task {
                 do {
                     guard let url = URL(string: llmType.url) else {
@@ -31,7 +40,7 @@ class LLMClient {
                     var request = URLRequest(url: url)
                     request.httpMethod = "POST"
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+                    request.httpBody = payloadData
                     
                     let sessionConfig = URLSessionConfiguration.default
                     sessionConfig.timeoutIntervalForRequest = 800
@@ -49,9 +58,10 @@ class LLMClient {
                         guard let data = line.data(using: .utf8) else { continue }
                         
                         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                            continuation.yield(json)
+                            let jsonData = try JSONSerialization.data(withJSONObject: json)
+                            continuation.yield(jsonData)
                             
-                            // detect Ollama completion
+                            // Detects completion for Ollama providers (needs handling for other provider types)
                             if let done = json["done"] as? Bool,
                                (done) {
                                 break
