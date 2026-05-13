@@ -28,6 +28,7 @@ python/pytest_cache/*
 
 # DAWSON specific (workspace root)
 workspace/*
+.mempalace/*
 
 # MemPalace specific
 mempalace.yaml

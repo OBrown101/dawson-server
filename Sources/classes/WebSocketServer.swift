@@ -22,7 +22,7 @@ struct WSPacket: Codable {
     }
 }
 
-final class WebSocketServer {
+final class WebSocketServer: @unchecked Sendable {
 
     weak var dawson: DAWSON?
     
@@ -33,8 +33,9 @@ final class WebSocketServer {
         connections[id] = ws
 
         ws.onText { [weak self] ws, text in
-            guard let self = self else { return }
-            onReceive(json: text, ws: ws)
+            Task {
+                await self?.onReceive(json: text, ws: ws)
+            }
         }
 
         ws.onClose.whenComplete { [weak self] _ in
@@ -42,7 +43,7 @@ final class WebSocketServer {
         }
     }
 
-    private func onReceive(json: String, ws: WebSocket) {
+    private func onReceive(json: String, ws: WebSocket) async {
         print("raw json received: \(json)")
         guard let data = json.data(using: .utf8),
               let packet: WSPacket = try? JSONDecoder().decode(WSPacket.self, from: data) else { return }
@@ -50,24 +51,24 @@ final class WebSocketServer {
         
         switch (packet.type) {
         case .ping:
-            send(WSPacket(type: .pong, payload: "pong"), ws: ws)
+            await send(WSPacket(type: .pong, payload: "pong"), ws: ws)
         case .userData:
             guard let payloadData = try? JSONSerialization.data(withJSONObject: packet.payload.value),
                   let userData = try? JSONDecoder().decode(UserData.self, from: payloadData) else {
-                send(WSPacket(type: .error, payload: "Invalid USER_DATA payload"), ws: ws)
+                await send(WSPacket(type: .error, payload: "Invalid USER_DATA payload"), ws: ws)
                 return
             }
             print("userdata")
-            handleUserData(userData, ws: ws)
+            await handleUserData(userData, ws: ws)
         default:
-            send(WSPacket(type: .error, payload: "Unknown packet type"), ws: ws)
+            await send(WSPacket(type: .error, payload: "Unknown packet type"), ws: ws)
         }
     }
 
-    private func send(_ message: WSPacket, ws: WebSocket) {
+    private func send(_ message: WSPacket, ws: WebSocket) async {
         guard let data = try? JSONEncoder().encode(message),
               let text = String(data: data, encoding: .utf8) else { return }
-        ws.send(text)
+        try? await ws.send(text)
     }
 
     func broadcast(_ message: WSPacket) {
@@ -81,51 +82,51 @@ final class WebSocketServer {
 
 extension WebSocketServer {
     
-    private func handleUserData(_ userData: UserData, ws: WebSocket) {
+    private func handleUserData(_ userData: UserData, ws: WebSocket) async {
         switch (userData.dataType) {
         case .textPrompt:
             guard let textPrompt = userData.payload.value as? String else {
-                send(WSPacket(type: .error, payload: "Invalid \(userData.dataType.rawValue) payload"), ws: ws)
+                await send(WSPacket(type: .error, payload: "Invalid \(userData.dataType.rawValue) payload"), ws: ws)
                 return
             }
             
-            Task {
-                print("textPrompt")
-                var dataIndex: [AgentEvent: Int32] = [:]
-                if (userData.agentUUID.isEmpty) { return }  // Invalid agentUUID
+            print("textPrompt")
+            var dataIndex: [AgentEvent: Int32] = [:]
+            if (userData.agentUUID.isEmpty) { return }  // Invalid agentUUID
+            
+            let _ = await dawson?.run(agentUUID: userData.agentUUID, prompt: textPrompt,
+              onEvent: { event, sessionUUID in
+                var dataType: AgentData.DataType
+                var payload: AnyCodable
+                let index = (dataIndex[event] ?? 0)
                 
-                let _ = await dawson?.run(agentUUID: userData.agentUUID, prompt: textPrompt,
-                  onEvent: { event, sessionUUID in
-                      var dataType: AgentData.DataType
-                      var payload: AnyCodable
-                      let index = (dataIndex[event] ?? 0)
-                    
-                      switch event {
-                      case .thinking(let text):
-                          dataType = .textThinking
-                          payload = AnyCodable(text)
-                      case .content(let text):
-                          dataType = .textResponse
-                          payload = AnyCodable(text)
-                      case .toolCall(let name):
-                          dataType = .toolCall
-                          payload = AnyCodable("Calling tool: \(name)")
-                      case .toolResult(let result):
-                          dataType = .toolResult
-                          payload = AnyCodable("Tool result: \(result)")
-                      }
-                    
-                    let agentData = AgentData(dataUUID: sessionUUID,
-                                              dataIndex: index,
-                                              agentUUID: userData.agentUUID,
-                                              userUUID: userData.userUUID,
-                                              dataType: dataType,
-                                              payload: payload)
-                    let response = WSPacket(type: .agentData, payload: AnyCodable(agentData))
-                    dataIndex[event] = (index + 1)
-                    self.send(response, ws: ws)
-                })
-            }
+                switch event {
+                case .thinking(let text):
+                    dataType = .textThinking
+                    payload = AnyCodable(text)
+                case .content(let text):
+                    dataType = .textResponse
+                    payload = AnyCodable(text)
+                case .toolCall(let name):
+                    dataType = .toolCall
+                    payload = AnyCodable("Calling tool: \(name)")
+                case .toolResult(let result):
+                    dataType = .toolResult
+                    payload = AnyCodable("Tool result: \(result)")
+                }
+                
+                let agentData = AgentData(dataUUID: sessionUUID,
+                                          dataIndex: index,
+                                          agentUUID: userData.agentUUID,
+                                          userUUID: userData.userUUID,
+                                          dataType: dataType,
+                                          payload: payload)
+                let response = WSPacket(type: .agentData, payload: AnyCodable(agentData))
+                dataIndex[event] = (index + 1)
+                Task {
+                    await self.send(response, ws: ws)
+                }
+            })
         case .dataPrompt:
             break
         case .agentConfig:

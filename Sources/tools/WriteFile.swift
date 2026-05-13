@@ -34,7 +34,7 @@ class WriteFile: Tool {
         ]
     }
 
-    func execute(args: [String: Any]) -> String {
+    func execute(args: [String: Any]) async -> String {
         guard let path = args["path"] as? String, !path.isEmpty else {
             return "Error: No path provided."
         }

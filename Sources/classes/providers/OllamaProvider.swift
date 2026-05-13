@@ -34,7 +34,9 @@ class OllamaProvider: LLMProvider {
         do {
             let stream = LLMClient.shared.streamJSON(llmType: .ollama, payload: payload)
             
-            for try await json in stream {
+            for try await jsonData in stream {
+                guard let json = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else { return response }
+                
                 var chunkResponse = ProviderResponse(createdAt: "", model: "", content: "")
                 
                 if let created = json["createdAt"] as? String {

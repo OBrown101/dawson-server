@@ -34,7 +34,7 @@ class RichFormatter: Tool {
         ]
     }
 
-    func execute(args: [String: Any]) -> String {
+    func execute(args: [String: Any]) async -> String {
         guard let text = args["text"] as? String,
               let format = args["format"] as? String else {
             return "Error: Missing text or format."

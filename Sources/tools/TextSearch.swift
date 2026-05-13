@@ -33,7 +33,7 @@ class TextSearch: Tool {
         ]
     }
 
-    func execute(args: [String: Any]) -> String {
+    func execute(args: [String: Any]) async -> String {
         guard let pattern = args["pattern"] as? String,
               let path = args["path"] as? String else {
             return "Error: Missing pattern or path."
@@ -55,15 +55,15 @@ class TextSearch: Tool {
         let fm = FileManager.default
         var isDir: ObjCBool = false
         if fm.fileExists(atPath: path, isDirectory: &isDir) {
-            if isDir.boolValue {
-                if let enumerator = fm.enumerator(atPath: path) {
-                    for case let file as String in enumerator {
-                        searchFile((path as NSString).appendingPathComponent(file))
-                    }
-                }
-            } else {
-                searchFile(path)
-            }
+//            if isDir.boolValue {
+//                if let enumerator = fm.enumerator(atPath: path) {
+//                    for case let file as String in enumerator {
+//                        searchFile((path as NSString).appendingPathComponent(file))
+//                    }
+//                }
+//            } else {
+//                searchFile(path)
+//            }
         } else {
             return "Error: Path does not exist."
         }

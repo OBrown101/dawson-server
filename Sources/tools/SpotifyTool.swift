@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Vapor
 
 class SpotifyTool: Tool {
     let name = "spotify_tool"
@@ -38,17 +39,13 @@ class SpotifyTool: Tool {
         ]
     }
 
-    func execute(args: [String: Any]) -> String {
+    func execute(args: [String: Any]) async -> String {
         guard let action = args["action"] as? String else {
             return "Error: 'action' is required."
         }
 
         #if os(macOS)
         return executeMac(action: action, args: args)
-        #elseif os(Linux)
-        return executeLinux(action: action, args: args)
-        #elseif os(Windows)
-        return executeWindows(action: action, args: args)
         #else
         return "Spotify control not supported on this platform."
         #endif
@@ -101,35 +98,6 @@ class SpotifyTool: Tool {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         return String(data: data, encoding: .utf8) ?? ""
     }
-    #endif
-
-    // MARK: - Linux Implementation (using dbus or spotifyd)
-    #if os(Linux)
-    private func executeLinux(action: String, args: [String: Any]) -> String {
-        // Requires spotifyd or playerctl installed
-        let command: String
-        switch action.lowercased() {
-        case "play": command = "playerctl play"
-        case "pause": command = "playerctl pause"
-        case "next": command = "playerctl next"
-        case "previous": command = "playerctl previous"
-        case "search":
-            return "Search via Web API recommended on Linux"
-        case "create_playlist":
-            return "Create playlist via Web API recommended on Linux"
-        default:
-            return "Unsupported action."
-        }
-        return runShellCommand(command)
-    }
-    #endif
-
-    // MARK: - Windows Implementation (via Spotify Web API or Win32 COM)
-    #if os(Windows)
-    private func executeWindows(action: String, args: [String: Any]) -> String {
-        return "Local Spotify control on Windows requires Web API integration or third-party tools (like Spotify CLI)."
-    }
-    #endif
 
     // MARK: - Helper: Run shell command
     private func runShellCommand(_ command: String) -> String {
@@ -152,4 +120,5 @@ class SpotifyTool: Tool {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         return String(data: data, encoding: .utf8) ?? ""
     }
+    #endif
 }

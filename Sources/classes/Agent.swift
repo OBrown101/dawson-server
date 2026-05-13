@@ -57,11 +57,11 @@ class Agent {
     static var requiredTools: [Tool] {
         return [
             EnvAwareness(),
-            MempalaceAddDrawer(), MempalaceCheckDuplicate(), MempalaceDeleteDrawer(), MempalaceDiaryRead(),
-            MempalaceDiaryWrite(), MempalaceGetAAAKSpec(), MempalaceGraphStats(),
-            MempalaceKgInvalidate(), MempalaceKgQuery(), MempalaceKgStats(), MempalaceKgTimeline(),
-            MempalaceListRooms(), MempalaceListWings(), MempalaceSearch(),
-            MempalaceStatus(), MempalaceTraverse()
+//            MempalaceAddDrawer(), MempalaceCheckDuplicate(), MempalaceDeleteDrawer(), MempalaceDiaryRead(),
+//            MempalaceDiaryWrite(), MempalaceGetAAAKSpec(), MempalaceGraphStats(),
+//            MempalaceKgInvalidate(), MempalaceKgQuery(), MempalaceKgStats(), MempalaceKgTimeline(),
+//            MempalaceListRooms(), MempalaceListWings(), MempalaceSearch(),
+//            MempalaceStatus(), MempalaceTraverse()
         ]
     }
 
@@ -103,7 +103,7 @@ class Agent {
         guard let tool = tools.first(where: { $0.name == toolCall.name }) else {
             return ("Error: unknown tool '\(toolCall.name)'")
         }
-        return tool.execute(args: toolCall.argDict)
+        return await tool.execute(args: toolCall.argDict)
     }
 
     func runAgent(

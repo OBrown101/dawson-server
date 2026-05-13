@@ -7,7 +7,7 @@
 
 import Foundation
 
-class DateHandler {
+class DateHandler: @unchecked Sendable {
     static let shared = DateHandler()
     let formatter = DateFormatter()
     let iso8601Formatter = ISO8601DateFormatter()

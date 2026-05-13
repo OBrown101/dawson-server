@@ -10,5 +10,5 @@ import Foundation
 protocol Tool {
     var name: String { get }
     func schema() -> [String: Any]
-    func execute(args: [String: Any]) -> String
+    func execute(args: [String: Any]) async -> String
 }

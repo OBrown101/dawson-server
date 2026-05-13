@@ -10,14 +10,21 @@ import Foundation
 
 import PythonKit
 
-enum PythonHandlerError: Error {
+enum PythonError: Error {
     case moduleNotFound(String)
     case functionNotFound(String)
     case invalidArgumentType(String)
     case pythonExecutionFailed(String)
+    case invalidScriptPath(String)
+    case processFailed(String)
 }
 
-class PythonHandler {
+struct PythonProcess {
+    let process: Process
+    let pid: Int32
+}
+
+class PythonHandler: @unchecked Sendable  {
     static let shared = PythonHandler()
     
     private var sys: PythonObject?
@@ -29,15 +36,8 @@ class PythonHandler {
         if (sys != nil) { return }
         
         let sysModule = try Python.attemptImport("sys")
-        let projectRoot = FileManager.default.currentDirectoryPath
-        
-        let pythonPaths = [
-            "\(projectRoot)/python",
-            "\(projectRoot)/python/venv/lib/python3.11/site-packages"
-        ]
-        for path in pythonPaths {
-            sysModule.path.append(path)
-        }
+        sysModule.path.insert(0, PythonEnv.pythonPackagesPath)
+        sysModule.path.insert(0, PythonEnv.pythonHomePath)
         
         sys = sysModule
     }
@@ -50,20 +50,20 @@ class PythonHandler {
             do {
                 module = try Python.attemptImport(moduleName)
             } catch {
-                throw PythonHandlerError.moduleNotFound(moduleName)
+                throw PythonError.moduleNotFound(moduleName)
             }
             
             let args = try toPython(args)
             
             guard let function = module.checking[dynamicMember: functionName] else {
-                throw PythonHandlerError.functionNotFound(functionName)
+                throw PythonError.functionNotFound(functionName)
             }
             let result = try function.throwing.dynamicallyCall(withArguments: args)
             
             // Detect Python-side exceptions
             let builtins = try Python.attemptImport("builtins")
             if Bool(builtins.isinstance(result, builtins.BaseException)) == true {
-                throw PythonHandlerError.pythonExecutionFailed(String(describing: result))
+                throw PythonError.pythonExecutionFailed(String(describing: result))
             }
             
             return result
@@ -93,7 +93,7 @@ class PythonHandler {
         case let v as [Double]:      return PythonObject(v)
         case is NSNull:              return Python.None
         default:
-            throw PythonHandlerError.invalidArgumentType("Unsupported type for \(type(of: value))")
+            throw PythonError.invalidArgumentType("Unsupported type for \(type(of: value))")
         }
     }
     
@@ -121,5 +121,61 @@ class PythonHandler {
         }
 
         return String(describing: obj)
+    }
+}
+
+extension PythonHandler {
+    func startPythonProcess(
+        scriptPath: String,
+        arguments: [String] = [],
+        environment: [String: String]? = nil,
+        inputPipe: Pipe,
+        outputPipe: Pipe,
+        errorPipe: Pipe
+    ) throws -> PythonProcess {
+        try ensurePython()
+        
+        guard FileManager.default.fileExists(atPath: scriptPath) else {
+            throw PythonError.invalidScriptPath(scriptPath)
+        }
+        
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: PythonEnv.pythonExecPath)
+        process.arguments = [scriptPath] + arguments
+
+        var env = ProcessInfo.processInfo.environment
+        env["PYTHONHOME"] = PythonEnv.pythonHomePath
+        env["PYTHONPATH"] = PythonEnv.pythonPackagesPath
+        env["PYTHONSAFEPATH"] = "1"
+
+        if let extraEnv = environment {
+            for (k, v) in extraEnv {
+                env[k] = v
+            }
+        }
+
+        process.environment = env
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+        process.standardInput = inputPipe
+
+        do {
+            try process.run()
+        } catch {
+            throw PythonError.processFailed(error.localizedDescription)
+        }
+
+        return PythonProcess(
+            process: process,
+            pid: process.processIdentifier
+        )
+    }
+
+    func isRunning(_ handle: PythonProcess) -> Bool {
+        return handle.process.isRunning
+    }
+
+    func stop(_ handle: PythonProcess) {
+        handle.process.terminate()
     }
 }

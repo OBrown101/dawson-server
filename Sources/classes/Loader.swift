@@ -7,7 +7,7 @@
 
 import Foundation
 
-class Loader {
+class Loader: @unchecked Sendable {
     static let shared = Loader()
     
     func buildBaseSystemPrompt(agent: AgentType) -> String {

@@ -8,13 +8,16 @@
 import Foundation
 import Vapor
 
+PythonEnv.setEnv()  // This must be setup before PythonKit is imported
+
 let app = try await Application.make(.development)
-defer { app.shutdown() }
+defer {
+    Task {
+        try? await app.asyncShutdown()
+    }
+}
 
-let projectRoot = FileManager.default.currentDirectoryPath
-let pythonLib = (projectRoot + "/python/python3/3.11/lib/libpython3.11.dylib")
-setenv("PYTHON_LIBRARY", pythonLib, 1)
-
+print("DAWSON started...")
 let dawson = DAWSON()
 
 app.http.server.configuration.hostname = "0.0.0.0"
