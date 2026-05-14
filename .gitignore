@@ -37,3 +37,6 @@ entities.json
 # Swift Playgrounds
 timeline.xctimeline
 playground.xcworkspace
+
+# Other
+.devcontainer/*

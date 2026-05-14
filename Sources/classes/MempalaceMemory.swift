@@ -17,27 +17,37 @@ class MempalaceMemory: @unchecked Sendable {
     static private let projectRoot = FileManager.default.currentDirectoryPath
     let palacePath = "\(projectRoot)/.mempalace"
     
+    /*
+    private var inputPipe: Pipe?
+    private var outputPipe: Pipe?
+    private var errorPipe: Pipe?
     
     func initMCP() {
+        let inputPipe = Pipe()
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+
+        self.inputPipe = inputPipe
+        self.outputPipe = outputPipe
+        self.errorPipe = errorPipe
+        
         Task {
             do {
+                let transport = StdioTransport(
+                    input: FileDescriptor(rawValue: outputPipe.fileHandleForReading.fileDescriptor),
+                    output: FileDescriptor(rawValue: inputPipe.fileHandleForWriting.fileDescriptor)
+                )
+                
+                _ = try PythonHandler.shared.startPythonProcess(
+                    scriptPath: "\(PythonEnv.pythonPackagesPath)/mempalace/mcp_server.py",
+                    arguments: ["--palace", self.palacePath],
+                    inputPipe: inputPipe,
+                    outputPipe: outputPipe,
+                    errorPipe: errorPipe
+                )
+                    
                 try await MCPHandler.shared.registerServer(serverName: "mempalace") {
-                    let inputPipe = Pipe()
-                    let outputPipe = Pipe()
-                    let errorPipe = Pipe()
-                    
-                    _ = try PythonHandler.shared.startPythonProcess(
-                        scriptPath: "\(PythonEnv.pythonPackagesPath)/mempalace/mcp_server.py",
-                        arguments: ["--palace \(self.palacePath)"],
-                        inputPipe: inputPipe,
-                        outputPipe: outputPipe,
-                        errorPipe: errorPipe
-                    )
-                    
-                    return StdioTransport(
-                        input: FileDescriptor(rawValue: inputPipe.fileHandleForReading.fileDescriptor),
-                        output: FileDescriptor(rawValue: outputPipe.fileHandleForWriting.fileDescriptor)
-                    )
+                    return transport
                 }
             } catch {
                 print("MempalaceMCP init failed: \(error)")
@@ -45,8 +55,22 @@ class MempalaceMemory: @unchecked Sendable {
         }
     }
     
+    func mempalaceMCPExec(name: String, args: [String: Any]) async -> String {
+        do {
+            let content = try await MCPHandler.shared.callTool(
+                serverName: "mempalace",
+                toolName: name,
+                arguments: args
+            )
+            
+            return MCPHandler.shared.convToString(content)
+        } catch {
+            return "Mempalace \(name) failed: \(error)"
+        }
+    }
+     */
     
-     func mempalaceExec(name: String, args: [String: Any]) -> String {
+    func mempalaceExec(name: String, args: [String: Any]) -> String {
         let mcpPayload: [String: Any] = [
             "method": "tools/call",
             "id": UUID().uuidString,

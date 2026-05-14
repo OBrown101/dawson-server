@@ -155,9 +155,9 @@ extension PythonHandler {
         }
 
         process.environment = env
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-        process.standardInput = inputPipe
+        process.standardInput = inputPipe.fileHandleForWriting
+        process.standardOutput = outputPipe.fileHandleForReading
+        process.standardError = errorPipe.fileHandleForWriting
 
         do {
             try process.run()

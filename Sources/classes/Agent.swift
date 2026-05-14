@@ -57,11 +57,11 @@ class Agent {
     static var requiredTools: [Tool] {
         return [
             EnvAwareness(),
-//            MempalaceAddDrawer(), MempalaceCheckDuplicate(), MempalaceDeleteDrawer(), MempalaceDiaryRead(),
-//            MempalaceDiaryWrite(), MempalaceGetAAAKSpec(), MempalaceGraphStats(),
-//            MempalaceKgInvalidate(), MempalaceKgQuery(), MempalaceKgStats(), MempalaceKgTimeline(),
-//            MempalaceListRooms(), MempalaceListWings(), MempalaceSearch(),
-//            MempalaceStatus(), MempalaceTraverse()
+            MempalaceAddDrawer(), MempalaceCheckDuplicate(), MempalaceDeleteDrawer(), MempalaceDiaryRead(),
+            MempalaceDiaryWrite(), MempalaceGetAAAKSpec(), MempalaceGraphStats(),
+            MempalaceKgInvalidate(), MempalaceKgQuery(), MempalaceKgStats(), MempalaceKgTimeline(),
+            MempalaceListRooms(), MempalaceListWings(), MempalaceSearch(),
+            MempalaceStatus(), MempalaceTraverse()
         ]
     }
 
