@@ -8,7 +8,7 @@ class DAWSON {
 
     let firstUserPrompt = "Hello, wake up and be ready to take commands."
     let defaultMaxMessage = 20
-    let defaultModel = "gpt-oss:20b"  // "qwen3.5-tools"
+    let defaultModel = "gpt-oss-20b-32k-16k"  // "qwen3.5-tools"
     let primaryAgentUUID = "PRIMARY"
     
     var activeAgents: [String: Agent] = [:]
@@ -18,8 +18,6 @@ class DAWSON {
         server.dawson = self
         
         let _ = spawnAgent(uuid: primaryAgentUUID, type: .dawson, model: defaultModel)     // Sets up primary Dawson agent
-        
-        MempalaceMemory.shared.initMCP()
     }
     
     func spawnAgent(uuid: String, type: AgentType, model: String? = nil) -> Agent {
