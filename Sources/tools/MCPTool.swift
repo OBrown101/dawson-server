@@ -9,8 +9,13 @@ import Foundation
 import MCP
 import System
 
-class MCPTool: Tool {
+class MCPTool: ChatSessionAware {
     let name = "mcp_tool"
+    private var session: ChatSessionInfo?
+
+    func setSession(_ session: ChatSessionInfo) {
+        self.session = session
+    }
     
     enum MCPAction: String, CaseIterable {
         case listServers = "list_servers"
@@ -105,6 +110,15 @@ class MCPTool: Tool {
     func execute(args: [String: Any]) async -> String {
         guard let action = args["action"] as? String else {
             return "Error: Missing required parameter 'action'."
+        }
+        
+        guard let session = session else {
+            return "Invalid chat session. Developer error."
+        }
+        do {
+            try ToolPermissionGuard.guardAll(session: session)
+        } catch {
+            return String(describing: error)
         }
         
         let mcpAction = MCPAction(rawValue: action)

@@ -9,8 +9,7 @@ import Foundation
 
 final class PythonEnv: @unchecked Sendable {
     
-    static private let projectRoot = FileManager.default.currentDirectoryPath
-    static let pythonHomePath = "\(projectRoot)/python/python3/3.11"
+    static let pythonHomePath = "\(DAWSON.root)/python/python3/3.11"
     static let pythonLibPath = "\(pythonHomePath)/lib/libpython3.11.dylib"
     static let pythonPackagesPath = "\(pythonHomePath)/lib/python3.11/site-packages"
     static let pythonExecPath = "\(pythonHomePath)/bin/python3"

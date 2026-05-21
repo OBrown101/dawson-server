@@ -7,8 +7,13 @@
 
 import Foundation
 
-class WriteFile: Tool {
+class WriteFile: ChatSessionAware {
     let name = "write_file"
+    private var session: ChatSessionInfo?
+
+    func setSession(_ session: ChatSessionInfo) {
+        self.session = session
+    }
 
     func schema() -> [String: Any] {
         return [
@@ -34,19 +39,27 @@ class WriteFile: Tool {
         ]
     }
 
-    func execute(args: [String: Any]) async -> String {
+    func execute(args: [String : Any]) async -> String {
         guard let path = args["path"] as? String, !path.isEmpty else {
             return "Error: No path provided."
         }
         guard let content = args["content"] as? String else {
             return "Error: No content provided."
         }
-        
-        let fileURL = URL(fileURLWithPath: path)
+        guard let session = session else {
+            return "Invalid chat session. Developer error."
+        }
         do {
+            try ToolPermissionGuard.guardCommands(session: session)
+        } catch {
+            return String(describing: error)
+        }
+        
+        do {
+            let fileURL = URL(fileURLWithPath: path)
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
             return "Successfully wrote to \(path)"
-        } catch {
+        } catch let error {
             return "Error writing file at \(path): \(error.localizedDescription)"
         }
     }

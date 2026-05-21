@@ -7,8 +7,13 @@
 
 import Foundation
 
-class Shell: Tool {
+class Shell: ChatSessionAware {
     let name = "shell"
+    private var session: ChatSessionInfo?
+
+    func setSession(_ session: ChatSessionInfo) {
+        self.session = session
+    }
 
     func schema() -> [String: Any] {
         return [
@@ -33,6 +38,15 @@ class Shell: Tool {
     func execute(args: [String: Any]) async -> String {
         guard let command = args["command"] as? String, !command.isEmpty else {
             return "Error: No command provided."
+        }
+        
+        guard let session = session else {
+            return "Invalid chat session. Developer error."
+        }
+        do {
+            try ToolPermissionGuard.guardAll(session: session)
+        } catch {
+            return String(describing: error)
         }
         
         let process = Process()

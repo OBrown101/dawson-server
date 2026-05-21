@@ -7,8 +7,13 @@
 
 import Foundation
 
-class EnvAwareness: Tool {
+class EnvAwareness: ChatSessionAware {
     let name = "environmental_awareness"
+    private var session: ChatSessionInfo?
+
+    func setSession(_ session: ChatSessionInfo) {
+        self.session = session
+    }
 
     func schema() -> [String: Any] {
         return [
@@ -26,6 +31,15 @@ class EnvAwareness: Tool {
     }
 
     func execute(args: [String: Any]) async -> String {
+        guard let session = session else {
+            return "Invalid chat session. Developer error."
+        }
+        do {
+            try ToolPermissionGuard.guardRead(session: session)
+        } catch {
+            return String(describing: error)
+        }
+        
         let now = Date()
         let formatter = DateFormatter()
         formatter.dateStyle = .full

@@ -47,13 +47,12 @@ class Agent {
     let llmType: LLMClient.LLMType
     let type: AgentType
     let model: String
-    let maxIterations: Int
     var maxMessages: Int
     var history: [Message]
     var tools: [Tool]
 
     var provider: LLMProvider
-    
+
     static var requiredTools: [Tool] {
         return [
             EnvAwareness(),
@@ -70,7 +69,6 @@ class Agent {
         llmType: LLMClient.LLMType = .ollama,
         type: AgentType,
         model: String,
-        maxIterations: Int = 15,
         maxMessages: Int = 40,
         history: [Message] = [],
         tools: [Tool] = []
@@ -79,29 +77,31 @@ class Agent {
         self.llmType = llmType
         self.type = type
         self.model = model
-        self.maxIterations = maxIterations
         self.maxMessages = maxMessages
         self.history = history
         self.tools = (Agent.requiredTools + tools)
 
         provider = Provider.provider(for: llmType)
     }
-    
+
     func getHistory() -> [Message] {
         return history
     }
-    
+
     func trimMessages(_ messages: [Message], recentWindow: Int = 200) -> [Message] {
         let systemMessages = messages.filter { $0.role == MsgSource.system.name }
         let nonSystemMessages = messages.filter { $0.role != MsgSource.system.name }
         let trimmed = nonSystemMessages.suffix(recentWindow)
-        
         return (systemMessages + trimmed)
     }
-    
-    func runTool(_ toolCall: ToolCall) async -> String {
+
+    func runTool(_ toolCall: ToolCall, chatSession: ChatSessionInfo) async -> String {
         guard let tool = tools.first(where: { $0.name == toolCall.name }) else {
             return ("Error: unknown tool '\(toolCall.name)'")
+        }
+        // Session awareness injection
+        if var aware = tool as? ChatSessionAware {
+            aware.setSession(chatSession)
         }
         return await tool.execute(args: toolCall.argDict)
     }
@@ -110,30 +110,30 @@ class Agent {
         userPrompt: String,
         systemPrompt: String = "",
         useThinking: Bool = true,
+        chatSession: ChatSessionInfo,
         onEvent: ((_ event: AgentEvent, _ sessionUUID: String) -> Void)? = nil
     ) async -> (error: String?, messages: [Message]) {
         let sessionUUID = UUID().uuidString
         var newMessages: [Message] = []
-        
+
         if (!systemPrompt.isEmpty) {
             let systemMsg = Message(role: MsgSource.system.name, text: systemPrompt)
             newMessages.append(systemMsg)
         }
-        
+
         let context = MempalaceMemory.shared.getPromptContext(query: userPrompt)
         let contextMsg = Message(role: MsgSource.assistant.name, text: context)
         newMessages.append(contextMsg)
-        
+
         let userMsg = Message(role: MsgSource.user.name, text: userPrompt)
         newMessages.append(userMsg)
-        
+
         let trimmedSessionHistory = trimMessages(history)
-//        print("Trimmed Session History: " + String(describing: trimmedSessionHistory.map { $0.text }))
-        
         var iterations = 0
-        while (iterations < maxIterations) {
+        let modeIterations = chatSession.mode.iterationLimit ?? Int.max
+        while (iterations < modeIterations) {
             let promptMessage = (trimmedSessionHistory + newMessages)
-            
+
             let response = await provider.send(
                 messages: promptMessage,
                 model: model,
@@ -165,7 +165,7 @@ class Agent {
             for tc in toolCalls {
                 print("Calling tool: \(tc.name)...")
                 onEvent?(.toolCall(tc.name), sessionUUID)
-                let result = await runTool(tc)
+                let result = await runTool(tc, chatSession: chatSession)
                 onEvent?(.toolResult(result), sessionUUID)
                 print("Tool result: \(result)")
                 
@@ -174,6 +174,10 @@ class Agent {
             }
             newMessages.append(contentsOf: toolResults)
             iterations += 1
+        }
+        if (iterations >= modeIterations) {
+            let iterationMaxMsg = Message(role: MsgSource.assistant.name, text: "Reached main agent loop iteration limit, may not have completed tasks/tool-calls.")
+            newMessages.append(iterationMaxMsg)
         }
         
         history.append(contentsOf: newMessages)

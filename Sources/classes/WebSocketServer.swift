@@ -94,8 +94,8 @@ extension WebSocketServer {
             var dataIndex: [AgentEvent: Int32] = [:]
             if (userData.agentUUID.isEmpty) { return }  // Invalid agentUUID
             
-            let _ = await dawson?.run(agentUUID: userData.agentUUID, prompt: textPrompt,
-              onEvent: { event, sessionUUID in
+            let _ = await dawson?.run(userUUID: userData.userUUID, agentUUID: userData.agentUUID, prompt: textPrompt,
+                                      onEvent: { event, sessionUUID in
                 var dataType: AgentData.DataType
                 var payload: AnyCodable
                 let index = (dataIndex[event] ?? 0)
@@ -130,6 +130,8 @@ extension WebSocketServer {
         case .dataPrompt:
             break
         case .agentConfig:
+            break
+        case .setMode:
             break
         }
     }
