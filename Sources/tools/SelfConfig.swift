@@ -35,8 +35,7 @@ class SelfConfig: Tool {
     }
 
     func execute(args: [String: Any]) async -> String {
-        let projectRoot = FileManager.default.currentDirectoryPath
-        let url = URL(fileURLWithPath: projectRoot + "/workspace/config.json")
+        let url = URL(fileURLWithPath: DAWSON.root + "/workspace/config.json")
 
         var currentConfig: [String: Any] = [:]
         if let data = try? Data(contentsOf: url),

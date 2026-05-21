@@ -14,8 +14,7 @@ import System
 class MempalaceMemory: @unchecked Sendable {
     static let shared = MempalaceMemory()
     
-    static private let projectRoot = FileManager.default.currentDirectoryPath
-    let palacePath = "\(projectRoot)/.mempalace"
+    let palacePath = "\(DAWSON.root)/.mempalace"
     
     /*
     private var inputPipe: Pipe?

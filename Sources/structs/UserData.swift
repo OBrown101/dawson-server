@@ -1,5 +1,5 @@
 //
-//  File 2.swift
+//  UserData.swift
 //  
 //
 //  Created by Ethan Brown on 4/25/26.
@@ -18,5 +18,6 @@ struct UserData: Codable {
         case textPrompt = "TEXT_PROMPT"
         case dataPrompt = "DATA_PROMPT"
         case agentConfig = "AGENT_CONFIG"
+        case setMode = "SET_MODE"
     }
 }

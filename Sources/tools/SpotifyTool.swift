@@ -8,8 +8,13 @@
 import Foundation
 import Vapor
 
-class SpotifyTool: Tool {
+class SpotifyTool: ChatSessionAware {
     let name = "spotify_tool"
+    private var session: ChatSessionInfo?
+
+    func setSession(_ session: ChatSessionInfo) {
+        self.session = session
+    }
 
     func schema() -> [String: Any] {
         return [
@@ -43,7 +48,16 @@ class SpotifyTool: Tool {
         guard let action = args["action"] as? String else {
             return "Error: 'action' is required."
         }
-
+        
+        guard let session = session else {
+            return "Invalid chat session. Developer error."
+        }
+        do {
+            try ToolPermissionGuard.guardCommands(session: session)
+        } catch {
+            return String(describing: error)
+        }
+        
         #if os(macOS)
         return executeMac(action: action, args: args)
         #else
@@ -87,36 +101,14 @@ class SpotifyTool: Tool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = ["-e", script]
-
+        
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = pipe
-
+        
         do { try process.run() } catch { return "Failed to run AppleScript: \(error)" }
         process.waitUntilExit()
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8) ?? ""
-    }
-
-    // MARK: - Helper: Run shell command
-    private func runShellCommand(_ command: String) -> String {
-        let process = Process()
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        #if os(Windows)
-        process.executableURL = URL(fileURLWithPath: "cmd.exe")
-        process.arguments = ["/C", command]
-        #else
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = ["-c", command]
-        #endif
-
-        do { try process.run() } catch { return "Failed to run command: \(error)" }
-        process.waitUntilExit()
-
+        
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         return String(data: data, encoding: .utf8) ?? ""
     }

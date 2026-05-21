@@ -24,7 +24,7 @@ struct PythonProcess {
     let pid: Int32
 }
 
-class PythonHandler: @unchecked Sendable  {
+class PythonHandler: @unchecked Sendable {
     static let shared = PythonHandler()
     
     private var sys: PythonObject?

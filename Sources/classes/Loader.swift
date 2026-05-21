@@ -12,17 +12,46 @@ class Loader: @unchecked Sendable {
     
     func buildBaseSystemPrompt(agent: AgentType) -> String {
         let soul = loadAgentSoul(agent)
-        let memorySchema = ("## YOUR MEMORY SETUP ##\n" + MempalaceMemory.shared.getStatus())
-        return (soul + "/n" + memorySchema)
+        let memorySchema = loadMemory()
+        let skillSummaries = loadSkillSummaries()
+        return (soul + "/n" + memorySchema + "/n" + skillSummaries)
+    }
+    
+    func loadMemory() -> String {
+        return ("## YOUR MEMORY SETUP ##\n" + MempalaceMemory.shared.getStatus())
     }
     
     func loadAgentSoul(_ agent: AgentType) -> String {
-        let projectRoot = FileManager.default.currentDirectoryPath
-        let url = URL(fileURLWithPath: projectRoot + agent.soulPath)
+        let url = URL(fileURLWithPath: DAWSON.root + agent.soulPath)
         if let content = try? String(contentsOf: url) {
             return content
         }
         print("Failed to load agent's soul at: \(url.absoluteString)")
         return "Failed to load the agent's soul/identity. Tell user about the issue and ask for help."
+    }
+    
+    func loadSkillSummaries() -> String {
+        let skills = SkillHandler.shared.loadSkills()
+        if (skills.isEmpty) { return "" }
+        
+        let summaries = skills.map { skill in
+            """
+            - Name: \(skill.name)
+              Description: \(skill.description)
+              Directory: \(skill.directoryPath)
+            """
+        }.joined(separator: "\n")
+        
+        return """
+        ## BRIEF SUMMARY FOR EACH OF YOUR SKILLS ##
+        These are lightweight summaries of the skills available to you. If a task matches one of these
+        descriptions, load the full SKILL.md from the listed directory to access the complete instructions.
+        
+        \(summaries)
+        """
+    }
+    
+    func loadFullSkill(_ skill: SkillMetadata) -> String? {
+        try? String(contentsOfFile: skill.skillFilePath, encoding: .utf8)
     }
 }

@@ -8,9 +8,14 @@
 import Foundation
 import PythonKit
 
-class RunPythonScript: Tool {
+class RunPythonScript: ChatSessionAware {
     let name = "run_python_script"
+    private var session: ChatSessionInfo?
 
+    func setSession(_ session: ChatSessionInfo) {
+        self.session = session
+    }
+    
     func schema() -> [String: Any] {
         return [
             "type": "function",
@@ -47,6 +52,15 @@ class RunPythonScript: Tool {
         }
         let rawArgs = args["args"] as? [String: Any] ?? [:]
 
+        guard let session = session else {
+            return "Invalid chat session. Developer error."
+        }
+        do {
+            try ToolPermissionGuard.guardAll(session: session)
+        } catch {
+            return String(describing: error)
+        }
+        
         do {
             let result = try PythonHandler.shared.call(moduleName: module, functionName: function, args: rawArgs)
             let convResult = PythonHandler.shared.fromPython(result)
