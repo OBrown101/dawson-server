@@ -8,7 +8,6 @@
 import Foundation
 
 struct ChatSuspendData: Codable {
-    let chatSessionUUID: String
     let agentUUID: String
     let runUUID: String
     var iterationIndex: Int

@@ -37,8 +37,8 @@ class DAWSON {
             tools: [
                 WriteFile(), SearchFile(), PatchFile(), ReplaceInFile(), ReadFile(), ListFiles(), Speak(), SelfConfig(), RichFormatter()
             ],
-            saveChatSession: { suspendData in
-                self.saveChatSuspendData(suspendData: suspendData)
+            saveChatSession: { chatSessionUUID, suspendData in
+                self.saveChatSuspendData(chatSessionUUID: chatSessionUUID, suspendData: suspendData)
             }
         )
         activeAgents[uuid] = newAgent
@@ -54,7 +54,7 @@ class DAWSON {
         if let existing = chatSessions[chatSessionUUID] {
             chatSession = existing
         } else {
-            let newSession = ChatSessionInfo(uuid: UUID().uuidString, userUUID: userUUID, mode: .fledgling)  // Currently hard-coded mode, will need change later
+            let newSession = ChatSessionInfo(uuid: chatSessionUUID, userUUID: userUUID, mode: .fledgling)  // Currently hard-coded mode, will need change later
             chatSessions[chatSessionUUID] = newSession
             chatSession = newSession
         }
@@ -64,7 +64,7 @@ class DAWSON {
     }
     
     func resume(response: UserInputResponse, onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil) async -> [Message] {
-        guard let session = chatSessions.first(where: { $0.value.suspendData?.userInputRequest?.uuid == response.requestUUID })?.value else {
+        guard let session = getChatSessionForRequest(requestUUID: response.requestUUID) else {
             print("Unable to find session for requestUUID: \(response.requestUUID)")
             return []
         }
@@ -81,7 +81,11 @@ class DAWSON {
 }
 
 extension DAWSON {
-    func saveChatSuspendData(suspendData: ChatSuspendData) {
-        chatSessions[suspendData.chatSessionUUID]?.suspendData = suspendData
+    func saveChatSuspendData(chatSessionUUID: String, suspendData: ChatSuspendData) {
+        chatSessions[chatSessionUUID]?.suspendData = suspendData
+    }
+    
+    func getChatSessionForRequest(requestUUID: String) -> ChatSessionInfo? {
+        return chatSessions.first(where: { $0.value.suspendData?.userInputRequest?.uuid == requestUUID })?.value
     }
 }
