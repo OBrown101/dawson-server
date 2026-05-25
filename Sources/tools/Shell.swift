@@ -7,12 +7,15 @@
 
 import Foundation
 
-class Shell: ChatSessionAware {
+class Shell: PermissionAware {
     let name = "shell"
-    private var session: ChatSessionInfo?
-
-    func setSession(_ session: ChatSessionInfo) {
-        self.session = session
+    
+    func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
+        guard let command = args["command"] as? String, !command.isEmpty else { return [] }
+        
+        return [
+            PermissionRequest(action: .command, target: command)
+        ]
     }
 
     func schema() -> [String: Any] {
@@ -38,15 +41,6 @@ class Shell: ChatSessionAware {
     func execute(args: [String: Any]) async -> String {
         guard let command = args["command"] as? String, !command.isEmpty else {
             return "Error: No command provided."
-        }
-        
-        guard let session = session else {
-            return "Invalid chat session. Developer error."
-        }
-        do {
-            try ToolPermissionGuard.guardAll(session: session)
-        } catch {
-            return String(describing: error)
         }
         
         let process = Process()

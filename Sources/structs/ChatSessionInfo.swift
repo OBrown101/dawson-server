@@ -7,9 +7,23 @@
 
 import Foundation
 
+struct ChatSuspendData: Codable {
+    let chatSessionUUID: String
+    let agentUUID: String
+    let runUUID: String
+    var iterationIndex: Int
+    var messages: [Message]
+    var userInputRequest: UserInputRequest? = nil
+    var toolCalls: [ToolCall]? = nil
+    var toolCallIndex: Int = 0
+}
+
 struct ChatSessionInfo: Codable {
+    let uuid: String
     let userUUID: String
-    var mode: Mode
+    var mode: ModeType
     var directories: [String] = [DAWSON.root]
+    
+    var suspendData: ChatSuspendData? = nil
 }
 

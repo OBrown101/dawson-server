@@ -7,12 +7,16 @@
 
 import Foundation
 
-class ListFiles: ChatSessionAware {
+class ListFiles: PermissionAware {
     let name = "list_files"
-    private var session: ChatSessionInfo?
-
-    func setSession(_ session: ChatSessionInfo) {
-        self.session = session
+    
+    func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
+        guard let path = args["path"] as? String,
+              !path.isEmpty else { return [] }
+        
+        return [
+            PermissionRequest(action: .read, target: path)
+        ]
     }
 
     func schema() -> [String: Any] {
@@ -52,16 +56,6 @@ class ListFiles: ChatSessionAware {
 
         let includeHidden = args["include_hidden"] as? Bool ?? false
         let maxResults = max(1, args["max_results"] as? Int ?? 1000)
-
-        guard let session = session else {
-            return "Invalid chat session. Developer error."
-        }
-        
-        do {
-            try ToolPermissionGuard.guardRead(from: path, session: session)
-        } catch {
-            return String(describing: error)
-        }
 
         do {
             let rootURL = URL(fileURLWithPath: path)

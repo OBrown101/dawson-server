@@ -5,12 +5,19 @@
 //  Created by Ethan Brown on 5/17/26.
 //
 
-class PatchFile: ChatSessionAware {
+class PatchFile: PermissionAware {
     let name = "path_file"
-    private var session: ChatSessionInfo?
-
-    func setSession(_ session: ChatSessionInfo) {
-        self.session = session
+    
+    func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
+        guard let path = args["path"] as? String,
+                !path.isEmpty else { return [] }
+        guard let diff = args["diff"] as? String,
+                !diff.isEmpty else { return [] }
+        
+        return [
+            PermissionRequest(action: .read, target: path),
+            PermissionRequest(action: .write, target: diff)
+        ]
     }
 
     func schema() -> [String: Any] {
@@ -44,17 +51,6 @@ class PatchFile: ChatSessionAware {
 
         guard let diff = args["diff"] as? String, !diff.isEmpty else {
             return "Error: No diff provided."
-        }
-
-        guard let session = session else {
-            return "Invalid chat session. Developer error."
-        }
-
-        do {
-            try ToolPermissionGuard.guardRead(from: path, session: session)
-            try ToolPermissionGuard.guardWrite(to: path, session: session)
-        } catch {
-            return String(describing: error)
         }
         
         do {

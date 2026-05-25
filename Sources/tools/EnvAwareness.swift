@@ -7,12 +7,13 @@
 
 import Foundation
 
-class EnvAwareness: ChatSessionAware {
+class EnvAwareness: PermissionAware {
     let name = "environmental_awareness"
-    private var session: ChatSessionInfo?
-
-    func setSession(_ session: ChatSessionInfo) {
-        self.session = session
+    
+    func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
+        return [
+            PermissionRequest(action: .read)
+        ]
     }
 
     func schema() -> [String: Any] {
@@ -31,15 +32,6 @@ class EnvAwareness: ChatSessionAware {
     }
 
     func execute(args: [String: Any]) async -> String {
-        guard let session = session else {
-            return "Invalid chat session. Developer error."
-        }
-        do {
-            try ToolPermissionGuard.guardRead(session: session)
-        } catch {
-            return String(describing: error)
-        }
-        
         let now = Date()
         let formatter = DateFormatter()
         formatter.dateStyle = .full

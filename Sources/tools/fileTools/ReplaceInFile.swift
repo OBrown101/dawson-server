@@ -7,12 +7,19 @@
 
 import Foundation
 
-class ReplaceInFile: ChatSessionAware {
+class ReplaceInFile: PermissionAware {
     let name = "replace_in_file"
-    private var session: ChatSessionInfo?
-
-    func setSession(_ session: ChatSessionInfo) {
-        self.session = session
+    
+    func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
+        guard let path = args["path"] as? String,
+                !path.isEmpty else { return [] }
+        guard let old = args["old"] as? String else { return [] }
+        guard let new = args["new"] as? String else { return [] }
+        
+        return [
+            PermissionRequest(action: .read, target: path),
+            PermissionRequest(action: .write, target: path, requirement: .userApproval, reason: "Modify file at '\(path)'.")
+        ]
     }
 
     func schema() -> [String: Any] {
@@ -54,17 +61,6 @@ class ReplaceInFile: ChatSessionAware {
 
         guard let new = args["new"] as? String else {
             return "Error: No new text provided."
-        }
-
-        guard let session = session else {
-            return "Invalid chat session. Developer error."
-        }
-        
-        do {
-            try ToolPermissionGuard.guardRead(from: path, session: session)
-            try ToolPermissionGuard.guardWrite(to: path, session: session)
-        } catch {
-            return String(describing: error)
         }
 
         do {

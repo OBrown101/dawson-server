@@ -7,12 +7,16 @@
 
 import Foundation
 
-class SearchFile: ChatSessionAware {
+class SearchFile: PermissionAware {
     let name = "search_file"
-    private var session: ChatSessionInfo?
-
-    func setSession(_ session: ChatSessionInfo) {
-        self.session = session
+    
+    func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
+        guard let pattern = args["pattern"] as? String,
+              !pattern.isEmpty else { return [] }
+        guard let path = args["path"] as? String,
+              !path.isEmpty else { return [] }
+        
+        return [PermissionRequest(action: .read, target: path)]
     }
 
     func schema() -> [String: Any] {
@@ -60,16 +64,6 @@ class SearchFile: ChatSessionAware {
 
         let caseSensitive = args["case_sensitive"] as? Bool ?? false
         let maxResults = max(1, args["max_results"] as? Int ?? 100)
-
-        guard let session = session else {
-            return "Invalid chat session. Developer error."
-        }
-
-        do {
-            try ToolPermissionGuard.guardRead(from: path, session: session)
-        } catch {
-            return String(describing: error)
-        }
         
         do {
             let rootURL = URL(fileURLWithPath: path)

@@ -5,12 +5,16 @@
 //  Created by Ethan Brown on 5/17/26.
 //
 
-class ReadFile: ChatSessionAware {
+class ReadFile: PermissionAware {
     let name = "read_file"
-    private var session: ChatSessionInfo?
-
-    func setSession(_ session: ChatSessionInfo) {
-        self.session = session
+    
+    func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
+        guard let path = args["path"] as? String,
+              !path.isEmpty else { return [] }
+        
+        return [
+            PermissionRequest(action: .read, target: path)
+        ]
     }
 
     func schema() -> [String: Any] {
@@ -57,16 +61,6 @@ class ReadFile: ChatSessionAware {
         let start = args["start"] as? Int
         let end = args["end"] as? Int
         let showLineNumbers = args["show_line_numbers"] as? Bool ?? false
-
-        guard let session = session else {
-            return "Invalid chat session. Developer error."
-        }
-        
-        do {
-            try ToolPermissionGuard.guardRead(from: path, session: session)
-        } catch {
-            return String(describing: error)
-        }
 
         do {
             let text = try String(contentsOfFile: path, encoding: .utf8)

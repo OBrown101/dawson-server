@@ -20,7 +20,7 @@ class GetSessionInfo: ChatSessionAware {
                 "name": name,
                 "description": """
                 Gets details about the current chat‑session with the user, including the user UUID, mode, and the
-                permissions that are enabled for that mode. Should be used anytime user or you need information about the current session.
+                permissions that are enabled for that mode.
                 """,
                 "parameters": [
                     "type": "object",
@@ -45,10 +45,10 @@ class GetSessionInfo: ChatSessionAware {
         User UUID: \(session.userUUID)
         Mode: \(session.mode.rawValue)
         Permissions:
-            canRead: \(session.mode.canRead)
-            canWrite: \(session.mode.canWrite)
-            canCommands: \(session.mode.canCommands)
-            canSudo: \(session.mode.canSudo)
+            canRead: \(session.mode.permissionDescription(for: .read))
+            canWrite: \(session.mode.permissionDescription(for: .write))
+            canCommands: \(session.mode.permissionDescription(for: .command))
+            canSudo: \(session.mode.permissionDescription(for: .sudo))
         Main agent-loop iteration limit: \(limitString)
         """
     }

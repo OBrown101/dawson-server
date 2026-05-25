@@ -37,7 +37,7 @@ class ExampleTool: Tool {
     }
 
     func execute(args: [String : Any]) async -> String {
-        guard let parameter = args["example_function_parameter"] as? String else {
+        guard let _ = args["example_function_parameter"] as? String else {
             return "Error: No parameter provided."
         }
         
@@ -75,7 +75,7 @@ class ExampleChatAwareTool: ChatSessionAware {
     }
 
     func execute(args: [String : Any]) async -> String {
-        guard let parameter = args["example_function_parameter"] as? String else {
+        guard let _ = args["example_function_parameter"] as? String else {
             return "Error: No parameter provided."
         }
         guard let session = session else {
@@ -84,7 +84,8 @@ class ExampleChatAwareTool: ChatSessionAware {
 
         do {
             // Use of ToolPermissionGuard function(s) to check if action allowed inside this chat-session
-            try ToolPermissionGuard.guardCommands(session: session) // Example check
+            let request = PermissionRequest(action: .command)
+            try session.mode.guardRequest(request, session: session) // Example check
         } catch {
             return String(describing: error)
         }

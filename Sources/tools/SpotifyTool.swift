@@ -8,12 +8,13 @@
 import Foundation
 import Vapor
 
-class SpotifyTool: ChatSessionAware {
+class SpotifyTool: PermissionAware {
     let name = "spotify_tool"
-    private var session: ChatSessionInfo?
-
-    func setSession(_ session: ChatSessionInfo) {
-        self.session = session
+    
+    func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
+        return [
+            PermissionRequest(action: .command)
+        ]
     }
 
     func schema() -> [String: Any] {
@@ -47,15 +48,6 @@ class SpotifyTool: ChatSessionAware {
     func execute(args: [String: Any]) async -> String {
         guard let action = args["action"] as? String else {
             return "Error: 'action' is required."
-        }
-        
-        guard let session = session else {
-            return "Invalid chat session. Developer error."
-        }
-        do {
-            try ToolPermissionGuard.guardCommands(session: session)
-        } catch {
-            return String(describing: error)
         }
         
         #if os(macOS)
