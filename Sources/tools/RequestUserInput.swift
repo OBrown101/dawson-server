@@ -29,8 +29,7 @@ class RequestUserInput: Tool {
     }
 
     func execute(args: [String: Any]) async -> String {
-        let prompt = args["prompt"] as? String ?? "Input required"
-        // Need to add when implemented in main agent loop
+        // Function not used since direct-call utilized in main agent-loop
         return ""
     }
 }

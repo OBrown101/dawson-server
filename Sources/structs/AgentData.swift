@@ -22,6 +22,7 @@ struct AgentData: Codable {
         case dataResponse = "DATA_RESPONSE"
         case toolCall = "TOOL_CALL"
         case toolResult = "TOOL_RESULT"
+        case userInputRequest = "USER_INPUT_REQUEST"
         case error = "ERROR"
     }
 }

@@ -8,12 +8,13 @@
 import Foundation
 import PythonKit
 
-class RunPythonScript: ChatSessionAware {
+class RunPythonScript: PermissionAware {
     let name = "run_python_script"
-    private var session: ChatSessionInfo?
-
-    func setSession(_ session: ChatSessionInfo) {
-        self.session = session
+    
+    func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
+        return [
+            PermissionRequest(action: .all)
+        ]
     }
     
     func schema() -> [String: Any] {
@@ -51,15 +52,6 @@ class RunPythonScript: ChatSessionAware {
             return "Error: Missing required parameters 'module' or 'function'"
         }
         let rawArgs = args["args"] as? [String: Any] ?? [:]
-
-        guard let session = session else {
-            return "Invalid chat session. Developer error."
-        }
-        do {
-            try ToolPermissionGuard.guardAll(session: session)
-        } catch {
-            return String(describing: error)
-        }
         
         do {
             let result = try PythonHandler.shared.call(moduleName: module, functionName: function, args: rawArgs)

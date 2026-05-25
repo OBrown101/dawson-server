@@ -1,0 +1,72 @@
+//
+//  FledglingMode.swift
+//  DAWSON
+//
+//  Created by Ethan Brown on 5/24/26.
+//
+
+import Foundation
+
+class WarriorMode: Mode {
+    static let iterationLimit: Int? = 50
+    
+    required init() {
+        
+    }
+    
+    static func evaluateRequests(_ requests: [PermissionRequest], session: ChatSessionInfo) -> [PermissionEvaluation] {
+        var evaluations: [PermissionEvaluation] = []
+        for request in requests {
+            switch request.action {
+            case .all:
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Full permission access is forbidden in this chat's mode.")))
+            case .read, .write:
+                evaluations.append(evaluateReadWrite(request, session: session))
+            case .command:
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Command execution is forbidden in this chat's current mode.")))
+            case .sudo:
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Sudo access is forbidden in this chat's current mode.")))
+            }
+        }
+        return evaluations
+    }
+    
+    static func evaluateReadWrite(_ request: PermissionRequest, session: ChatSessionInfo) -> PermissionEvaluation {
+        guard let path = request.target else {
+            return PermissionEvaluation(request: request, decision: .denied(reason: "Missing \(request.action.rawValue) target path."))
+        }
+        return PermissionEvaluation(request: request, decision: .requiresApproval(reason: "\(request.action.rawValue.capitalized) operation requires user approval: \(path)"))
+    }
+    
+    static func getPermissionDescription(for action: ModeAction) -> String {
+        switch action {
+        case .all:
+            return ""
+        case .read:
+            return ""
+        case .write:
+            return ""
+        case .command:
+            return ""
+        case .sudo:
+            return ""
+        }
+    }
+    
+    static func guardRequests(_ requests: [PermissionRequest], session: ChatSessionInfo) throws {
+        for request in requests {
+            switch request.action {
+            case .all:
+                throw ModePermissionError.forbidden
+            case .read, .write:
+                guard let path = request.target else { break }
+                let inDirectories = Utility.inSessionDirectories(path: path, session: session)
+                guard (inDirectories) else { throw ModePermissionError.forbidden }
+            case .command:
+                throw ModePermissionError.forbidden
+            case .sudo:
+                throw ModePermissionError.forbidden
+            }
+        }
+    }
+}
