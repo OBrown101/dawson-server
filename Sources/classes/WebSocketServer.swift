@@ -107,7 +107,7 @@ extension WebSocketServer {
             if (userData.agentUUID.isEmpty) { return }  // Invalid agentUUID
             
             let _ = await dawson?.run(userUUID: userData.userUUID, agentUUID: userData.agentUUID, prompt: textPrompt,
-                                      onEvent: { event, sessionUUID in
+                                      onEvent: { event, runUUID in
                 var dataType: AgentData.DataType
                 var payload: AnyCodable
                 let index = (dataIndex[event.key] ?? 0)
@@ -116,26 +116,32 @@ extension WebSocketServer {
                 case .thinking(let text):
                     dataType = .textThinking
                     payload = AnyCodable(text)
+                    
                 case .content(let text):
                     dataType = .textResponse
                     payload = AnyCodable(text)
+                    
                 case .toolCall(let name):
                     dataType = .toolCall
                     payload = AnyCodable("Calling tool: \(name)")
+                    
                 case .toolResult(let result):
                     dataType = .toolResult
                     payload = AnyCodable("Tool result: \(result)")
+                    
                 case .userInputRequest(let prompt):
                     dataType = .userInputRequest
                     payload = AnyCodable(prompt)
                 }
                 
-                let agentData = AgentData(dataUUID: sessionUUID,
-                                          dataIndex: index,
-                                          agentUUID: userData.agentUUID,
-                                          userUUID: userData.userUUID,
-                                          dataType: dataType,
-                                          payload: payload)
+                let agentData = AgentData(
+                    dataUUID: runUUID,
+                    dataIndex: index,
+                    agentUUID: userData.agentUUID,
+                    userUUID: userData.userUUID,
+                    dataType: dataType,
+                    payload: payload
+                )
                 let response = WSPacket(type: .agentData, payload: AnyCodable(agentData))
                 dataIndex[event.key] = (index + 1)
                 Task {
@@ -152,11 +158,14 @@ extension WebSocketServer {
     }
     
     private func handleUserInputResponse(_ response: UserInputResponse, ws: WebSocket) async {
+        guard let dawson = dawson,
+              let chatSession = dawson.getChatSessionForRequest(requestUUID: response.requestUUID),
+              let agentUUID = chatSession.suspendData?.agentUUID else { return }
         var dataIndex: [String: Int32] = [:]
 
-        let _ = await dawson?.resume(
+        let _ = await dawson.resume(
             response: response,
-            onEvent: { event, sessionUUID in
+            onEvent: { event, runUUID in
                 var dataType: AgentData.DataType
                 var payload: AnyCodable
                 let index = (dataIndex[event.key] ?? 0)
@@ -184,10 +193,10 @@ extension WebSocketServer {
                 }
 
                 let agentData = AgentData(
-                    dataUUID: sessionUUID,
+                    dataUUID: runUUID,
                     dataIndex: index,
-                    agentUUID: "",
-                    userUUID: "",
+                    agentUUID: agentUUID,
+                    userUUID: chatSession.userUUID,
                     dataType: dataType,
                     payload: payload
                 )

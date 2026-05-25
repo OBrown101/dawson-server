@@ -61,7 +61,7 @@ class Agent {
     var maxMessages: Int
     var history: [Message]
     var tools: [Tool]
-    let saveChatSession: (ChatSuspendData) -> Void
+    let saveChatSession: (String, ChatSuspendData) -> Void
 
     var provider: LLMProvider
 
@@ -84,7 +84,7 @@ class Agent {
         maxMessages: Int = 40,
         history: [Message] = [],
         tools: [Tool] = [],
-        saveChatSession: @escaping (ChatSuspendData) -> Void
+        saveChatSession: @escaping (String, ChatSuspendData) -> Void
     ) {
         self.uuid = uuid
         self.llmType = llmType
@@ -100,16 +100,15 @@ class Agent {
 
     private func saveChatSession(chatSessionUUID: String, runUUID: String, iterationIndex: Int, messages: [Message], userInputRequest: UserInputRequest, toolCallIndex: Int = 0, toolCalls: [ToolCall]?) {
         let suspendData = ChatSuspendData(
-            chatSessionUUID: chatSessionUUID,
             agentUUID: uuid,
             runUUID: runUUID,
-            iterationIndex: 0,
+            iterationIndex: iterationIndex,
             messages: messages,
             userInputRequest: userInputRequest,
             toolCalls: toolCalls,
             toolCallIndex: toolCallIndex
         )
-        saveChatSession(suspendData)
+        saveChatSession(chatSessionUUID, suspendData)
     }
     
     func getHistory() -> [Message] {
@@ -233,8 +232,13 @@ class Agent {
             if (toolCalls.indices.contains(suspendData.toolCallIndex)) {
                 // Need to execute original tool that requested user-input (to prevent re-triggering request)
                 let tc = toolCalls[suspendData.toolCallIndex]
-                let toolOutput = await executeTool(tc, chatSession: chatSession)
-                messages.append(Message(role: MsgSource.tool.name, text: toolOutput))
+                if (tc.name != RequestUserInput().name) {
+                    let toolOutput = await executeTool(tc, chatSession: chatSession)
+                    messages.append(Message(role: MsgSource.tool.name, text: toolOutput))
+                } else {
+                    let toolOutput = "User responded to request: '\(userResponse)'."
+                    messages.append(Message(role: MsgSource.tool.name, text: toolOutput))
+                }
                 
                 toolCallIndex = (suspendData.toolCallIndex + 1)
             }
@@ -295,6 +299,7 @@ class Agent {
                     case .suspended(let request):
                         onEvent?(.userInputRequest(request), runUUID)
                         print("Tool result: requirest permission -> \(request.prompt)")
+                        toolResults.append(Message(role: MsgSource.tool.name, text: "__PENDING_USER_INPUT__"))
                         newMessages.append(contentsOf: toolResults)
                         saveChatSession(chatSessionUUID: chatSession.uuid, runUUID: runUUID, iterationIndex: iterations, messages: newMessages, userInputRequest: request, toolCallIndex: index, toolCalls: existingToolCalls)
                         return (nil, newMessages)
@@ -304,9 +309,6 @@ class Agent {
                 newMessages.append(contentsOf: toolResults)
                 pendingToolCalls = nil
                 pendingToolIndex = 0
-                
-                iterations += 1
-                continue
             }
 
             let promptMessage = (trimmedSessionHistory + newMessages)
@@ -338,6 +340,7 @@ class Agent {
 
             pendingToolCalls = toolCalls
             pendingToolIndex = 0
+            iterations += 1
         }
 
         if (iterations >= modeIterations) {
