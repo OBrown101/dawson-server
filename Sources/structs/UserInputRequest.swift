@@ -8,7 +8,8 @@
 import Foundation
 
 struct UserInputRequest: Codable {
-    let uuid: String
+    let agentUUID: String
+    let userUUID: String
     let type: UserRequestType
     let prompt: String          // Can be reason for request or LLM's prompt to the user
     let toolCallName: String?

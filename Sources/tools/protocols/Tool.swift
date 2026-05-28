@@ -46,13 +46,14 @@ class ExampleTool: Tool {
     }
 }
 
-class ExampleChatAwareTool: ChatSessionAware {
-    let name = "example_tool"
-    private var session: ChatSessionInfo?
-
-    func setSession(_ session: ChatSessionInfo) {
-        self.session = session
+class ExamplePermissionAwareTool: PermissionAware {
+    func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
+        return [
+            PermissionRequest(action: .read)    // Example permission check
+        ]
     }
+    
+    let name = "example_tool"
 
     func schema() -> [String: Any] {
         return [
@@ -77,17 +78,6 @@ class ExampleChatAwareTool: ChatSessionAware {
     func execute(args: [String : Any]) async -> String {
         guard let _ = args["example_function_parameter"] as? String else {
             return "Error: No parameter provided."
-        }
-        guard let session = session else {
-            return "Invalid chat session. Developer error."
-        }
-
-        do {
-            // Use of ToolPermissionGuard function(s) to check if action allowed inside this chat-session
-            let request = PermissionRequest(action: .command)
-            try session.mode.guardRequest(request, session: session) // Example check
-        } catch {
-            return String(describing: error)
         }
         
         // Actual execution of tool call and a returned string of the result or error

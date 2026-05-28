@@ -9,11 +9,11 @@ import Foundation
 
 class Utility {
     
-    static func inSessionDirectories(path: String, session: ChatSessionInfo) -> Bool {
+    static func inSessionDirectories(path: String, directories: [String]) -> Bool {
         let fullPath = NSString(string: path).expandingTildeInPath
         let fullURL  = URL(fileURLWithPath: fullPath).standardizedFileURL
         
-        return session.directories.contains { dir in
+        return directories.contains { dir in
             let dirURL = URL(fileURLWithPath: dir).standardizedFileURL
             return fullURL.path.hasPrefix(dirURL.path)
         }

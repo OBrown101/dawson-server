@@ -5,12 +5,12 @@
 //  Created by Ethan Brown on 5/20/26.
 //
 
-class GetSessionInfo: ChatSessionAware {
+class GetSessionInfo: ChatAware {
     let name = "get_session_info"
-    private var session: ChatSessionInfo?
-
-    func setSession(_ session: ChatSessionInfo) {
-        self.session = session
+    
+    var chat: Chat? = nil
+    func setChat(_ chat: Chat?) {
+        self.chat = chat
     }
 
     func schema() -> [String: Any] {
@@ -31,24 +31,23 @@ class GetSessionInfo: ChatSessionAware {
     }
 
     func execute(args: [String : Any]) async -> String {
-        guard let session = session else {
-            return "Error: No session set for the tool."
-        }
-
+        guard let chat = chat else { return "Unable to find current chat session." }
+        guard let agent = AgentHandler.shared.getAgent(chat.agentUUID) else { return "Unable to find agent assigned to chat session." }
+        
         var limitString = "No limit"
-        if let limit = session.mode.iterationLimit {
+        if let limit = agent.mode.iterationLimit {
             limitString = String(limit)
         }
         
         return """
         ## Current Chat Session Information ##
-        User UUID: \(session.userUUID)
-        Mode: \(session.mode.rawValue)
+        User UUID: \(chat.userUUID)
+        Mode: \(agent.mode.rawValue)
         Permissions:
-            canRead: \(session.mode.permissionDescription(for: .read))
-            canWrite: \(session.mode.permissionDescription(for: .write))
-            canCommands: \(session.mode.permissionDescription(for: .command))
-            canSudo: \(session.mode.permissionDescription(for: .sudo))
+            canRead: \(agent.mode.permissionDescription(for: .read))
+            canWrite: \(agent.mode.permissionDescription(for: .write))
+            canCommands: \(agent.mode.permissionDescription(for: .command))
+            canSudo: \(agent.mode.permissionDescription(for: .sudo))
         Main agent-loop iteration limit: \(limitString)
         """
     }

@@ -10,7 +10,7 @@ import Foundation
 class Loader: @unchecked Sendable {
     static let shared = Loader()
     
-    func buildBaseSystemPrompt(agent: AgentType) -> String {
+    func buildBaseSystemPrompt(agent: Agent.AgentType) -> String {
         let soul = loadAgentSoul(agent)
         let memorySchema = loadMemory()
         let skillSummaries = loadSkillSummaries()
@@ -21,7 +21,7 @@ class Loader: @unchecked Sendable {
         return ("## YOUR MEMORY SETUP ##\n" + MempalaceMemory.shared.getStatus())
     }
     
-    func loadAgentSoul(_ agent: AgentType) -> String {
+    func loadAgentSoul(_ agent: Agent.AgentType) -> String {
         let url = URL(fileURLWithPath: DAWSON.root + agent.soulPath)
         if let content = try? String(contentsOf: url) {
             return content

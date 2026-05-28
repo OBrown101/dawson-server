@@ -6,7 +6,8 @@
 //
 
 struct UserInputResponse: Codable {
-    let requestUUID: String
+    let agentUUID: String
+    let userUUID: String
     let accepted: Bool?
     let responseText: String?
 }

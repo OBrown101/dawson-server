@@ -9,6 +9,7 @@ import Foundation
 import AnyCodable
 
 struct UserData: Codable {
+    let chatUUID: String
     let agentUUID: String
     let userUUID: String
     let dataType: DataType
@@ -17,7 +18,5 @@ struct UserData: Codable {
     enum DataType: String, Codable {
         case textPrompt = "TEXT_PROMPT"
         case dataPrompt = "DATA_PROMPT"
-        case agentConfig = "AGENT_CONFIG"
-        case setMode = "SET_MODE"
     }
 }
