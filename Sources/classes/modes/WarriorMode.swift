@@ -14,14 +14,14 @@ class WarriorMode: Mode {
         
     }
     
-    static func evaluateRequests(_ requests: [PermissionRequest], session: ChatSessionInfo) -> [PermissionEvaluation] {
+    static func evaluateRequests(_ requests: [PermissionRequest], agent: Agent) -> [PermissionEvaluation] {
         var evaluations: [PermissionEvaluation] = []
         for request in requests {
             switch request.action {
             case .all:
                 evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Full permission access is forbidden in this chat's mode.")))
             case .read, .write:
-                evaluations.append(evaluateReadWrite(request, session: session))
+                evaluations.append(evaluateReadWrite(request, agent: agent))
             case .command:
                 evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Command execution is forbidden in this chat's current mode.")))
             case .sudo:
@@ -31,7 +31,7 @@ class WarriorMode: Mode {
         return evaluations
     }
     
-    static func evaluateReadWrite(_ request: PermissionRequest, session: ChatSessionInfo) -> PermissionEvaluation {
+    static func evaluateReadWrite(_ request: PermissionRequest, agent: Agent) -> PermissionEvaluation {
         guard let path = request.target else {
             return PermissionEvaluation(request: request, decision: .denied(reason: "Missing \(request.action.rawValue) target path."))
         }
@@ -53,14 +53,14 @@ class WarriorMode: Mode {
         }
     }
     
-    static func guardRequests(_ requests: [PermissionRequest], session: ChatSessionInfo) throws {
+    static func guardRequests(_ requests: [PermissionRequest], agent: Agent) throws {
         for request in requests {
             switch request.action {
             case .all:
                 throw ModePermissionError.forbidden
             case .read, .write:
                 guard let path = request.target else { break }
-                let inDirectories = Utility.inSessionDirectories(path: path, session: session)
+                let inDirectories = Utility.inSessionDirectories(path: path, directories: agent.directories)
                 guard (inDirectories) else { throw ModePermissionError.forbidden }
             case .command:
                 throw ModePermissionError.forbidden

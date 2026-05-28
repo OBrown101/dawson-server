@@ -18,6 +18,7 @@ struct WSPacket: Codable {
         case pong = "PONG"
         case userData = "USER_DATA"
         case agentData = "AGENT_DATA"
+        case chatData = "CHAT_DATA"
         case userInputRequest = "USER_INPUT_REQUEST"
         case userInputRequestResponse = "USER_INPUT_REQUEST_RESPONSE"
         case error = "ERROR"
@@ -58,16 +59,23 @@ final class WebSocketServer: @unchecked Sendable {
         case .userData:
             guard let payloadData = try? JSONSerialization.data(withJSONObject: packet.payload.value),
                   let userData = try? JSONDecoder().decode(UserData.self, from: payloadData) else {
-                await send(WSPacket(type: .error, payload: "Invalid USER_DATA payload"), ws: ws)
+                await send(WSPacket(type: .error, payload: "Invalid \(packet.type.rawValue) payload"), ws: ws)
                 return
             }
-            print("userdata")
             await handleUserData(userData, ws: ws)
+
+        case .chatData:
+            guard let payloadData = try? JSONSerialization.data(withJSONObject: packet.payload.value),
+                  let chatData = try? JSONDecoder().decode(ChatData.self, from: payloadData) else {
+                await send(WSPacket(type: .error, payload: "Invalid \(packet.type.rawValue) payload"), ws: ws)
+                return
+            }
+            await handleChatData(chatData, ws: ws)
             
         case .userInputRequestResponse:
             guard let payloadData = try? JSONSerialization.data(withJSONObject: packet.payload.value),
                   let response = try? JSONDecoder().decode(UserInputResponse.self, from: payloadData) else {
-                await send(WSPacket(type: .error, payload: "Invalid USER_INPUT_REQUEST_RESPONSE payload"), ws: ws)
+                await send(WSPacket(type: .error, payload: "Invalid \(packet.type.rawValue) payload"), ws: ws)
                 return
             }
             await handleUserInputResponse(response, ws: ws)
@@ -102,69 +110,61 @@ extension WebSocketServer {
                 return
             }
             
-            print("textPrompt")
             var dataIndex: [String: Int32] = [:]
             if (userData.agentUUID.isEmpty) { return }  // Invalid agentUUID
             
-            let _ = await dawson?.run(userUUID: userData.userUUID, agentUUID: userData.agentUUID, prompt: textPrompt,
-                                      onEvent: { event, runUUID in
-                var dataType: AgentData.DataType
-                var payload: AnyCodable
-                let index = (dataIndex[event.key] ?? 0)
+            await DAWSON.shared.getChatResponse(chatUUID: userData.chatUUID, prompt: textPrompt,
+                onEvent: { event, runUUID in
+                    var dataType: AgentData.DataType
+                    var payload: AnyCodable
+                    let index = (dataIndex[event.key] ?? 0)
+                    
+                    switch event {
+                    case .thinking(let text):
+                        dataType = .textThinking
+                        payload = AnyCodable(text)
+                        
+                    case .content(let text):
+                        dataType = .textResponse
+                        payload = AnyCodable(text)
+                        
+                    case .toolCall(let name):
+                        dataType = .toolCall
+                        payload = AnyCodable(name)
+                        
+                    case .toolResult(let result):
+                        dataType = .toolResult
+                        payload = AnyCodable(result)
+                        
+                    case .userInputRequest(let prompt):
+                        dataType = .userInputRequest
+                        payload = AnyCodable(prompt)
+                    }
                 
-                switch event {
-                case .thinking(let text):
-                    dataType = .textThinking
-                    payload = AnyCodable(text)
-                    
-                case .content(let text):
-                    dataType = .textResponse
-                    payload = AnyCodable(text)
-                    
-                case .toolCall(let name):
-                    dataType = .toolCall
-                    payload = AnyCodable("Calling tool: \(name)")
-                    
-                case .toolResult(let result):
-                    dataType = .toolResult
-                    payload = AnyCodable("Tool result: \(result)")
-                    
-                case .userInputRequest(let prompt):
-                    dataType = .userInputRequest
-                    payload = AnyCodable(prompt)
+                    let agentData = AgentData(
+                        dataUUID: runUUID,
+                        dataIndex: index,
+                        agentUUID: userData.agentUUID,
+                        userUUID: userData.userUUID,
+                        dataType: dataType,
+                        payload: payload
+                    )
+                    let response = WSPacket(type: .agentData, payload: AnyCodable(agentData))
+                    dataIndex[event.key] = (index + 1)
+                    Task {
+                        await self.send(response, ws: ws)
+                    }
                 }
-                
-                let agentData = AgentData(
-                    dataUUID: runUUID,
-                    dataIndex: index,
-                    agentUUID: userData.agentUUID,
-                    userUUID: userData.userUUID,
-                    dataType: dataType,
-                    payload: payload
-                )
-                let response = WSPacket(type: .agentData, payload: AnyCodable(agentData))
-                dataIndex[event.key] = (index + 1)
-                Task {
-                    await self.send(response, ws: ws)
-                }
-            })
+            )
         case .dataPrompt:
-            break
-        case .agentConfig:
-            break
-        case .setMode:
             break
         }
     }
     
     private func handleUserInputResponse(_ response: UserInputResponse, ws: WebSocket) async {
-        guard let dawson = dawson,
-              let chatSession = dawson.getChatSessionForRequest(requestUUID: response.requestUUID),
-              let agentUUID = chatSession.suspendData?.agentUUID else { return }
         var dataIndex: [String: Int32] = [:]
 
-        let _ = await dawson.resume(
-            response: response,
+        await DAWSON.shared.getChatResumedResponse(response: response,
             onEvent: { event, runUUID in
                 var dataType: AgentData.DataType
                 var payload: AnyCodable
@@ -181,11 +181,11 @@ extension WebSocketServer {
 
                 case .toolCall(let name):
                     dataType = .toolCall
-                    payload = AnyCodable("Calling tool: \(name)")
+                    payload = AnyCodable(name)
 
                 case .toolResult(let result):
                     dataType = .toolResult
-                    payload = AnyCodable("Tool result: \(result)")
+                    payload = AnyCodable(result)
 
                 case .userInputRequest(let request):
                     dataType = .userInputRequest
@@ -195,8 +195,8 @@ extension WebSocketServer {
                 let agentData = AgentData(
                     dataUUID: runUUID,
                     dataIndex: index,
-                    agentUUID: agentUUID,
-                    userUUID: chatSession.userUUID,
+                    agentUUID: response.agentUUID,
+                    userUUID: response.userUUID,
                     dataType: dataType,
                     payload: payload
                 )
@@ -208,5 +208,48 @@ extension WebSocketServer {
                 }
             }
         )
+    }
+    
+    private func handleChatData(_ chatData: ChatData, ws: WebSocket) async {
+        switch (chatData.dataType) {
+        case .upsert:
+            guard let payloadData = try? JSONSerialization.data(withJSONObject: chatData.payload.value),
+                  let chat = try? JSONDecoder().decode(Chat.self, from: payloadData) else {
+                await send(WSPacket(type: .error, payload: "Invalid \(chatData.dataType.rawValue) payload"), ws: ws)
+                return
+            }
+            DAWSON.shared.upsertChat(chat)
+            
+        case .delete:
+            guard let chatUUID = chatData.payload.value as? String else {
+                await send(WSPacket(type: .error, payload: "Invalid \(chatData.dataType.rawValue) payload"), ws: ws)
+                return
+            }
+            DAWSON.shared.deleteChat(chatUUID)
+        case .syncChat:
+            guard let chatUUID = chatData.payload.value as? String else {
+                await send(WSPacket(type: .error, payload: "Invalid \(chatData.dataType.rawValue) payload"), ws: ws)
+                return
+            }
+            guard let chat = DAWSON.shared.getChat(chatUUID) else { return }
+            let chatData = ChatData(userUUID: chatData.userUUID, agentUUID: chatData.agentUUID, dataType: .syncChat, payload: AnyCodable(chat))
+            let response = WSPacket(type: .chatData, payload: AnyCodable(chatData))
+            Task {
+                await self.send(response, ws: ws)
+            }
+            
+        case .syncMsgs:
+            guard let chatUUID = chatData.payload.value as? String else {
+                await send(WSPacket(type: .error, payload: "Invalid \(chatData.dataType.rawValue) payload"), ws: ws)
+                return
+            }
+            
+            let messageDatas = AnyCodable(DAWSON.shared.getAllMessages(chatUUID))
+            let chatData = ChatData(userUUID: chatData.userUUID, agentUUID: chatData.agentUUID, dataType: .syncMsgs, payload: messageDatas)
+            let response = WSPacket(type: .chatData, payload: AnyCodable(chatData))
+            Task {
+                await self.send(response, ws: ws)
+            }
+        }
     }
 }

@@ -18,13 +18,12 @@ defer {
 }
 
 print("DAWSON started...")
-let dawson = DAWSON()
 
 app.http.server.configuration.hostname = "0.0.0.0"
 app.http.server.configuration.port = 8080
 
 app.webSocket("dawson") { req, ws in
-    dawson.server.handle(ws)
+    DAWSON.shared.server.handle(ws)
 }
 
 print("WebSocket running...")

@@ -8,10 +8,10 @@
 import Foundation
 
 enum ModeType: String, Codable {
-    case egg
-    case fledgling
-    case warrior
-    case ultimate
+    case egg = "EGG"
+    case fledgling = "FLEDGLING"
+    case warrior = "WARRIOR"
+    case ultimate = "ULTIMATE"
 }
 
 extension ModeType {
@@ -36,15 +36,15 @@ extension ModeType {
         modeClass.init()
     }
     
-    func evaluateRequests(_ requests: [PermissionRequest], session: ChatSessionInfo) -> [PermissionEvaluation] {
-        return modeClass.evaluateRequests(requests, session: session)
+    func evaluateRequests(_ requests: [PermissionRequest], agent: Agent) -> [PermissionEvaluation] {
+        return modeClass.evaluateRequests(requests, agent: agent)
     }
 
-    func guardRequests(_ requests: [PermissionRequest], session: ChatSessionInfo) throws {
-        try modeClass.guardRequests(requests, session: session)
+    func guardRequests(_ requests: [PermissionRequest], agent: Agent) throws {
+        try modeClass.guardRequests(requests, agent: agent)
     }
     
-    func guardRequest(_ request: PermissionRequest, session: ChatSessionInfo) throws {
-        try guardRequests([request], session: session)
+    func guardRequest(_ request: PermissionRequest, agent: Agent) throws {
+        try guardRequests([request], agent: agent)
     }
 }

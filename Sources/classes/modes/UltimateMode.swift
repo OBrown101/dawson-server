@@ -14,7 +14,7 @@ class UltimateMode: Mode {
         
     }
     
-    static func evaluateRequests(_ requests: [PermissionRequest], session: ChatSessionInfo) -> [PermissionEvaluation] {
+    static func evaluateRequests(_ requests: [PermissionRequest], agent: Agent) -> [PermissionEvaluation] {
         var evaluations: [PermissionEvaluation] = []
         for request in requests {
             evaluations.append(PermissionEvaluation(request: request, decision: .allowed))
@@ -37,7 +37,7 @@ class UltimateMode: Mode {
         }
     }
     
-    static func guardRequests(_ requests: [PermissionRequest], session: ChatSessionInfo) throws {
+    static func guardRequests(_ requests: [PermissionRequest], agent: Agent) throws {
         for request in requests {
             switch request.action {
             case .all:

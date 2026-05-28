@@ -11,6 +11,6 @@ protocol Mode {
     init()
     static var iterationLimit: Int? { get }
     static func getPermissionDescription(for action: ModeAction) -> String
-    static func evaluateRequests(_ requests: [PermissionRequest], session: ChatSessionInfo) -> [PermissionEvaluation]
-    static func guardRequests(_ requests: [PermissionRequest], session: ChatSessionInfo) throws
+    static func evaluateRequests(_ requests: [PermissionRequest], agent: Agent) -> [PermissionEvaluation]
+    static func guardRequests(_ requests: [PermissionRequest], agent: Agent) throws
 }

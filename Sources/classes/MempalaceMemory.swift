@@ -91,7 +91,7 @@ class MempalaceMemory: @unchecked Sendable {
         return mempalaceExec(name: "mempalace_status", args: [:])
     }
     
-    func addConvHistory(messages: [Message], agent: AgentType) {
+    func addConvHistory(messages: [Message], agent: Agent.AgentType) {
         guard let jsonData = try? JSONEncoder().encode(messages),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
             print("Failed to add conversation history.")

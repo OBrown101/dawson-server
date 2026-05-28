@@ -19,51 +19,37 @@ enum AgentEvent {
     }
 }
 
-enum AgentType {
-    case dawson
-    case squireBot
+actor AgentRunner {
+    private var running = false
     
-    var name: String {
-        switch (self) {
-        case .dawson:
-            "agent_dawson"
-        case .squireBot:
-            "agent_squirebot"
-        }
+    func setRunning(_ running: Bool = true) {
+        self.running = running
     }
     
-    var soulPath: String {
-        switch (self) {
-        case .dawson:
-            "/workspace/config/DAWSON_SOUL.md"
-        case .squireBot:
-            "/workspace/config/SQUIREBOT_SOUL.md"
-        }
-    }
-    
-    static func fromName(_ name: String) -> AgentType? {
-        switch name {
-        case self.dawson.name:
-            return .dawson
-        case self.squireBot.name:
-            return .squireBot
-        default:
-            return nil
-        }
+    func isRunning() -> Bool {
+        return running
     }
 }
 
+
 class Agent {
+    static let primaryAgentUUID = "PRIMARY"
+    
     let uuid: String
+    let userUUID: String
     let llmType: LLMClient.LLMType
     let type: AgentType
+    var mode: ModeType
     let model: String
     var maxMessages: Int
-    var history: [Message]
     var tools: [Tool]
-    let saveChatSession: (String, ChatSuspendData) -> Void
-
+    
+    private var history: [Message] = []
+    var suspendData: SuspendData? = nil
+    var directories: [String] = [DAWSON.root]
+    
     var provider: LLMProvider
+    let runner: AgentRunner
 
     static var requiredTools: [Tool] {
         return [
@@ -78,29 +64,42 @@ class Agent {
 
     init(
         uuid: String,
+        userUUID: String,
         llmType: LLMClient.LLMType = .ollama,
         type: AgentType,
+        mode: ModeType,
         model: String,
-        maxMessages: Int = 40,
+        maxMessages: Int,
         history: [Message] = [],
-        tools: [Tool] = [],
-        saveChatSession: @escaping (String, ChatSuspendData) -> Void
+        tools: [Tool] = []
     ) {
         self.uuid = uuid
+        self.userUUID = userUUID
         self.llmType = llmType
         self.type = type
+        self.mode = mode
         self.model = model
         self.maxMessages = maxMessages
         self.history = history
         self.tools = (Agent.requiredTools + tools)
-        self.saveChatSession = saveChatSession
 
         provider = Provider.provider(for: llmType)
+        runner = AgentRunner()
     }
-
-    private func saveChatSession(chatSessionUUID: String, runUUID: String, iterationIndex: Int, messages: [Message], userInputRequest: UserInputRequest, toolCallIndex: Int = 0, toolCalls: [ToolCall]?) {
-        let suspendData = ChatSuspendData(
-            agentUUID: uuid,
+    
+    func getHistory() -> [Message] {
+        return history
+    }
+    
+    private func suspendSession(
+        runUUID: String,
+        iterationIndex: Int,
+        messages: [Message],
+        userInputRequest: UserInputRequest,
+        toolCallIndex: Int = 0,
+        toolCalls: [ToolCall]?
+    ) {
+        suspendData = SuspendData(
             runUUID: runUUID,
             iterationIndex: iterationIndex,
             messages: messages,
@@ -108,22 +107,18 @@ class Agent {
             toolCalls: toolCalls,
             toolCallIndex: toolCallIndex
         )
-        saveChatSession(chatSessionUUID, suspendData)
-    }
-    
-    func getHistory() -> [Message] {
-        return history
+        // TODO: Need to send out Notification
     }
 
-    func trimMessages(_ messages: [Message], recentWindow: Int = 200) -> [Message] {
+    private func trimMessages(_ messages: [Message]) -> [Message] {
         // TODO: Recent-window trimming is brute-force, will need to change handling
         let systemMessages = messages.filter { $0.role == MsgSource.system.name }
         let nonSystemMessages = messages.filter { $0.role != MsgSource.system.name }
-        let trimmed = nonSystemMessages.suffix(recentWindow)
+        let trimmed = nonSystemMessages.suffix(maxMessages)
         return (systemMessages + trimmed)
     }
     
-    func executeTool(_ toolCall: ToolCall, chatSession: ChatSessionInfo) async -> String {
+    private func executeTool(_ toolCall: ToolCall) async -> String {
         guard let tool = tools.first(where: { $0.name == toolCall.name }) else {
             return "Error: unknown tool '\(toolCall.name)'"
         }
@@ -131,7 +126,7 @@ class Agent {
         return await tool.execute(args: toolCall.argDict)
     }
 
-    func runTool(_ toolCall: ToolCall, chatSession: ChatSessionInfo) async -> ToolResult {
+    private func runTool(_ toolCall: ToolCall) async -> ToolResult {
         guard let tool = tools.first(where: { $0.name == toolCall.name }) else {
             return .denied("Error: unknown tool '\(toolCall.name)'")
         }
@@ -140,19 +135,19 @@ class Agent {
             let prompt = toolCall.argDict["prompt"] as? String ?? "Input required"
 
             let request = UserInputRequest(
-                uuid: UUID().uuidString,
+                agentUUID: uuid,
+                userUUID: userUUID,
                 type: .input,
                 prompt: prompt,
                 toolCallName: toolCall.name,
                 metadata: [:]
             )
-
             return .suspended(request)
         }
         
         if let permissionTool = tool as? PermissionAware {
             let requests = permissionTool.permissionRequests(args: toolCall.argDict)
-            let evaluations = chatSession.mode.evaluateRequests(requests, session: chatSession)
+            let evaluations = mode.evaluateRequests(requests, agent: self)
             
             for evaluation in evaluations {
                 switch evaluation.decision {
@@ -164,7 +159,8 @@ class Agent {
                     
                 case .requiresApproval(let reason):
                     let request = UserInputRequest(
-                        uuid: UUID().uuidString,
+                        agentUUID: uuid,
+                        userUUID: userUUID,
                         type: .permission,
                         prompt: reason,
                         toolCallName: toolCall.name,
@@ -173,6 +169,8 @@ class Agent {
                     return .suspended(request)
                 }
             }
+        } else if let chatTool = tool as? ChatAware {
+            chatTool.setChat(DAWSON.shared.getChatForAgent(uuid))
         }
         return .completed(await tool.execute(args: toolCall.argDict))
     }
@@ -181,9 +179,11 @@ class Agent {
         userPrompt: String,
         systemPrompt: String = "",
         useThinking: Bool = true,
-        chatSession: ChatSessionInfo,
         onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
-    ) async -> (error: String?, messages: [Message]) {
+    ) async throws -> [Message] {
+        if await (runner.isRunning()) { throw AgentError.agentRunning }
+        await runner.setRunning()
+        
         let runUUID = UUID().uuidString // Represents a specific prompt-response to allow piecing together chunks of a specific response into single text by clients
         var newMessages: [Message] = []
 
@@ -198,25 +198,20 @@ class Agent {
         return await runInternalLoop(
             runUUID: runUUID,
             startMessages: newMessages,
-            chatSession: chatSession,
             useThinking: useThinking,
             onEvent: onEvent
         )
     }
     
     func resumeAgent(
-        chatSession: ChatSessionInfo,
         userResponse: UserInputResponse,
         onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
-    ) async -> (error: String?, messages: [Message]) {
-        guard let suspendData = chatSession.suspendData else {
-            return ("No suspended session.", [])
-        }
-        guard let request = suspendData.userInputRequest else {
-            return ("No pending request.", [])
-        }
-        guard (request.uuid == userResponse.requestUUID) else {
-            return ("Request UUID mismatch.", [])
+    ) async throws -> [Message] {
+        if await (runner.isRunning()) { throw AgentError.agentRunning }
+        await runner.setRunning()
+        
+        guard let suspendData = suspendData else {
+            throw AgentError.notSuspended
         }
 
         var messages = suspendData.messages
@@ -227,13 +222,13 @@ class Agent {
             messages.append(Message(role: MsgSource.tool.name, text: "User denied request."))
         } else {
             guard let toolCalls = suspendData.toolCalls else {
-                return ("Missing tool calls.", messages)
+                throw AgentError.suspendMissingToolCalls
             }
             if (toolCalls.indices.contains(suspendData.toolCallIndex)) {
                 // Need to execute original tool that requested user-input (to prevent re-triggering request)
                 let tc = toolCalls[suspendData.toolCallIndex]
                 if (tc.name != RequestUserInput().name) {
-                    let toolOutput = await executeTool(tc, chatSession: chatSession)
+                    let toolOutput = await executeTool(tc)
                     messages.append(Message(role: MsgSource.tool.name, text: toolOutput))
                 } else {
                     let toolOutput = "User responded to request: '\(userResponse)'."
@@ -250,7 +245,6 @@ class Agent {
             startMessages: messages,
             existingToolCalls: toolCalls,
             existingToolCallIndex: toolCallIndex,
-            chatSession: chatSession,
             onEvent: onEvent
         )
     }
@@ -261,15 +255,14 @@ class Agent {
         startMessages: [Message],
         existingToolCalls: [ToolCall]? = nil,
         existingToolCallIndex: Int = 0,
-        chatSession: ChatSessionInfo,
         useThinking: Bool = true,
         onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
-    ) async -> (error: String?, messages: [Message]) {
+    ) async -> [Message] {
         var newMessages = startMessages
         
         let trimmedSessionHistory = trimMessages(history)
         var iterations = iterationIndex
-        let modeIterations = chatSession.mode.iterationLimit ?? Int.max
+        let modeIterations = mode.iterationLimit ?? Int.max
         
         var pendingToolCalls = existingToolCalls
         var pendingToolIndex = existingToolCallIndex
@@ -282,7 +275,7 @@ class Agent {
 
                     print("Calling tool: \(tc.name)...")
                     onEvent?(.toolCall(tc.name), runUUID)
-                    let result = await runTool(tc, chatSession: chatSession)
+                    let result = await runTool(tc)
 
                     switch result {
                     case .completed(let output):
@@ -301,8 +294,8 @@ class Agent {
                         print("Tool result: requirest permission -> \(request.prompt)")
                         toolResults.append(Message(role: MsgSource.tool.name, text: "__PENDING_USER_INPUT__"))
                         newMessages.append(contentsOf: toolResults)
-                        saveChatSession(chatSessionUUID: chatSession.uuid, runUUID: runUUID, iterationIndex: iterations, messages: newMessages, userInputRequest: request, toolCallIndex: index, toolCalls: existingToolCalls)
-                        return (nil, newMessages)
+                        suspendSession(runUUID: runUUID, iterationIndex: iterations, messages: newMessages, userInputRequest: request, toolCallIndex: index, toolCalls: existingToolCalls)
+                        return newMessages
                     }
                 }
 
@@ -335,7 +328,7 @@ class Agent {
                   (!toolCalls.isEmpty) else {
                 history.append(contentsOf: newMessages)
                 MempalaceMemory.shared.addConvHistory(messages: newMessages, agent: type)
-                return (nil, newMessages)
+                return newMessages
             }
 
             pendingToolCalls = toolCalls
@@ -347,7 +340,72 @@ class Agent {
             let iterationMaxMsg = Message(role: MsgSource.assistant.name, text: "Reached main agent loop iteration limit, may not have completed tasks/tool-calls.")
             newMessages.append(iterationMaxMsg)
         }
-        return ("Iteration limit reached.", newMessages)
+        return newMessages
     }
     
+}
+
+extension Agent {
+    struct SuspendData: Codable {
+        let runUUID: String
+        var iterationIndex: Int
+        var messages: [Message]
+        var userInputRequest: UserInputRequest? = nil
+        var toolCalls: [ToolCall]? = nil
+        var toolCallIndex: Int = 0
+    }
+    
+    enum AgentType {
+        case dawson
+        case squireBot
+        
+        var name: String {
+            switch (self) {
+            case .dawson:
+                "agent_dawson"
+            case .squireBot:
+                "agent_squirebot"
+            }
+        }
+        
+        var soulPath: String {
+            switch (self) {
+            case .dawson:
+                "/workspace/config/DAWSON_SOUL.md"
+            case .squireBot:
+                "/workspace/config/SQUIREBOT_SOUL.md"
+            }
+        }
+        
+        static func fromName(_ name: String) -> AgentType? {
+            switch name {
+            case self.dawson.name:
+                return .dawson
+            case self.squireBot.name:
+                return .squireBot
+            default:
+                return nil
+            }
+        }
+    }
+    
+    enum AgentError: Error, LocalizedError {
+        case agentRunning
+        case notSuspended
+        case noUserInputRequest
+        case suspendMissingToolCalls
+        
+        var errorDescription: String? {
+            switch self {
+            case .agentRunning:
+                return "Agent already running"
+            case .notSuspended:
+                return "Agent not suspended, can't be resumed"
+            case .noUserInputRequest:
+                return "Agent suspended but no UserInputRequest"
+            case .suspendMissingToolCalls:
+                return "Agent suspended but missing tool calls"
+            }
+        }
+    }
 }
