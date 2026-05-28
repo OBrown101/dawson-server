@@ -35,9 +35,12 @@ class PythonHandler: @unchecked Sendable {
     private func ensurePython() throws {
         if (sys != nil) { return }
         
+        let scriptsPath = URL(fileURLWithPath: DAWSON.root).appendingPathComponent("python-scripts")
+        
         let sysModule = try Python.attemptImport("sys")
         sysModule.path.insert(0, PythonEnv.pythonPackagesPath)
-        sysModule.path.insert(0, PythonEnv.pythonHomePath)
+        sysModule.path.insert(0, PythonEnv.pythonHome.path)
+        sysModule.path.insert(0, scriptsPath.path)
         
         sys = sysModule
     }
@@ -144,7 +147,7 @@ extension PythonHandler {
         process.arguments = [scriptPath] + arguments
 
         var env = ProcessInfo.processInfo.environment
-        env["PYTHONHOME"] = PythonEnv.pythonHomePath
+        env["PYTHONHOME"] = PythonEnv.pythonHome.path
         env["PYTHONPATH"] = PythonEnv.pythonPackagesPath
         env["PYTHONSAFEPATH"] = "1"
 

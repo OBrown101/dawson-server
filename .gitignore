@@ -1,4 +1,7 @@
 
+# Python
+python-macos/*
+
 # Build artifacts (SwiftPM & Xcode)
 .build/*
 .swiftpm/*

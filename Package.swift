@@ -21,7 +21,6 @@ let package = Package(
         .executableTarget(
             name: "DAWSON",
             dependencies: [
-                // Link AnyCodable to your target
                 .product(name: "AnyCodable", package: "AnyCodable"),
                 .product(name: "SQLite", package: "SQLite.swift"),
                 .product(name: "Vapor", package: "vapor"),
