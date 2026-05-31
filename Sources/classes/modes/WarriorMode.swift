@@ -19,13 +19,13 @@ class WarriorMode: Mode {
         for request in requests {
             switch request.action {
             case .all:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Full permission access is forbidden in this chat's mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Full permission access is forbidden in this chat's mode.")))
             case .read, .write:
                 evaluations.append(evaluateReadWrite(request, agent: agent))
             case .command:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Command execution is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Command execution is forbidden in this chat's current mode.")))
             case .sudo:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Sudo access is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Sudo access is forbidden in this chat's current mode.")))
             }
         }
         return evaluations
@@ -33,7 +33,7 @@ class WarriorMode: Mode {
     
     static func evaluateReadWrite(_ request: PermissionRequest, agent: Agent) -> PermissionEvaluation {
         guard let path = request.target else {
-            return PermissionEvaluation(request: request, decision: .denied(reason: "Missing \(request.action.rawValue) target path."))
+            return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Missing \(request.action.rawValue) target path."))
         }
         return PermissionEvaluation(request: request, decision: .requiresApproval(reason: "\(request.action.rawValue.capitalized) operation requires user approval: \(path)"))
     }

@@ -47,13 +47,13 @@ class ExampleTool: Tool {
 }
 
 class ExamplePermissionAwareTool: PermissionAware {
+    let name = "example_tool"
+    
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
         return [
             PermissionRequest(action: .read)    // Example permission check
         ]
     }
-    
-    let name = "example_tool"
 
     func schema() -> [String: Any] {
         return [

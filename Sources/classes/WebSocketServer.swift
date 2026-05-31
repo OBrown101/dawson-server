@@ -103,6 +103,7 @@ final class WebSocketServer: @unchecked Sendable {
 extension WebSocketServer {
     
     private func handleUserData(_ userData: UserData, ws: WebSocket) async {
+        guard let dawson = dawson else { return }
         switch (userData.dataType) {
         case .textPrompt:
             guard let textPrompt = userData.payload.value as? String else {
@@ -111,9 +112,7 @@ extension WebSocketServer {
             }
             
             var dataIndex: [String: Int32] = [:]
-            if (userData.agentUUID.isEmpty) { return }  // Invalid agentUUID
-            
-            await DAWSON.shared.getChatResponse(chatUUID: userData.chatUUID, prompt: textPrompt,
+            await dawson.getChatResponse(chatUUID: userData.chatUUID, prompt: textPrompt,
                 onEvent: { event, runUUID in
                     var dataType: AgentData.DataType
                     var payload: AnyCodable
@@ -162,9 +161,10 @@ extension WebSocketServer {
     }
     
     private func handleUserInputResponse(_ response: UserInputResponse, ws: WebSocket) async {
+        guard let dawson = dawson else { return }
         var dataIndex: [String: Int32] = [:]
 
-        await DAWSON.shared.getChatResumedResponse(response: response,
+        await dawson.getChatResumedResponse(response: response,
             onEvent: { event, runUUID in
                 var dataType: AgentData.DataType
                 var payload: AnyCodable
@@ -211,6 +211,8 @@ extension WebSocketServer {
     }
     
     private func handleChatData(_ chatData: ChatData, ws: WebSocket) async {
+        guard let dawson = dawson else { return }
+        
         switch (chatData.dataType) {
         case .upsert:
             guard let payloadData = try? JSONSerialization.data(withJSONObject: chatData.payload.value),
@@ -218,34 +220,57 @@ extension WebSocketServer {
                 await send(WSPacket(type: .error, payload: "Invalid \(chatData.dataType.rawValue) payload"), ws: ws)
                 return
             }
-            DAWSON.shared.upsertChat(chat)
+            dawson.upsertChat(chat)
             
         case .delete:
             guard let chatUUID = chatData.payload.value as? String else {
                 await send(WSPacket(type: .error, payload: "Invalid \(chatData.dataType.rawValue) payload"), ws: ws)
                 return
             }
-            DAWSON.shared.deleteChat(chatUUID)
+            dawson.deleteChat(chatUUID)
+            
         case .syncChat:
-            guard let chatUUID = chatData.payload.value as? String else {
-                await send(WSPacket(type: .error, payload: "Invalid \(chatData.dataType.rawValue) payload"), ws: ws)
-                return
+            var payload: AnyCodable
+            if let chatUUID = chatData.chatUUID {
+                guard let chat = dawson.getChat(chatUUID),
+                      let encoded = try? JSONEncoder().encode(chat),
+                      let json = try? JSONDecoder().decode(AnyCodable.self, from: encoded) else { return }
+                payload = json
+            } else {
+                let chats = dawson.getAllChats()
+                guard let encoded = try? JSONEncoder().encode(chats),
+                      let json = try? JSONDecoder().decode(AnyCodable.self, from: encoded) else { return }
+                payload = json
             }
-            guard let chat = DAWSON.shared.getChat(chatUUID) else { return }
-            let chatData = ChatData(userUUID: chatData.userUUID, agentUUID: chatData.agentUUID, dataType: .syncChat, payload: AnyCodable(chat))
+            
+            let chatData = ChatData(
+                chatUUID: chatData.chatUUID,
+                userUUID: chatData.userUUID,
+                agentUUID: chatData.agentUUID,
+                dataType: .syncChat,
+                payload: payload
+            )
             let response = WSPacket(type: .chatData, payload: AnyCodable(chatData))
             Task {
                 await self.send(response, ws: ws)
             }
             
         case .syncMsgs:
-            guard let chatUUID = chatData.payload.value as? String else {
-                await send(WSPacket(type: .error, payload: "Invalid \(chatData.dataType.rawValue) payload"), ws: ws)
-                return
+            var payload: AnyCodable
+            if let chatUUID = chatData.chatUUID {
+                payload = AnyCodable(dawson.getMessagesForChat(chatUUID))
+            } else {
+                let messages = dawson.getAllMessages(userUUID: chatData.userUUID)
+                payload = AnyCodable(messages)
             }
             
-            let messageDatas = AnyCodable(DAWSON.shared.getAllMessages(chatUUID))
-            let chatData = ChatData(userUUID: chatData.userUUID, agentUUID: chatData.agentUUID, dataType: .syncMsgs, payload: messageDatas)
+            let chatData = ChatData(
+                chatUUID: chatData.chatUUID,
+                userUUID: chatData.userUUID,
+                agentUUID: chatData.agentUUID,
+                dataType: .syncMsgs,
+                payload: payload
+            )
             let response = WSPacket(type: .chatData, payload: AnyCodable(chatData))
             Task {
                 await self.send(response, ws: ws)

@@ -14,15 +14,40 @@ class Loader: @unchecked Sendable {
         let soul = loadAgentSoul(agent)
         let memorySchema = loadMemory()
         let skillSummaries = loadSkillSummaries()
-        return (soul + "/n" + memorySchema + "/n" + skillSummaries)
+        let basicInfo = loadBasicInfo()
+        return [soul, basicInfo, memorySchema, skillSummaries].joined(separator: "/n")
+    }
+    
+    func loadBasicInfo() -> String {
+        let now = Date()
+        let formatter = DateFormatter()
+        formatter.dateStyle = .full
+        formatter.timeStyle = .full
+        formatter.timeZone = TimeZone.current
+        let dateString = formatter.string(from: now)
+        let timezoneName = TimeZone.current.identifier
+        
+        return """
+        ## BASIC INFO ##
+        Date & time: \(dateString)
+        Time zone: \(timezoneName)
+        ## --- ##
+        """
     }
     
     func loadMemory() -> String {
-        return ("## YOUR MEMORY SETUP ##\n" + MempalaceMemory.shared.getStatus())
+        return """
+        ## YOUR MEMORY SETUP ##
+        \(MempalaceMemory.shared.getStatus())
+        Your agent loop already calls mempalace_search on every user prompt (by default) and the result is fed into your conversation context.
+        ## --- ##
+        """
     }
     
     func loadAgentSoul(_ agent: Agent.AgentType) -> String {
-        let url = URL(fileURLWithPath: DAWSON.root + agent.soulPath)
+        guard let soulPath = agent.soulPath else { return "" }
+        
+        let url = URL(fileURLWithPath: DAWSON.root + soulPath)
         if let content = try? String(contentsOf: url) {
             return content
         }
@@ -48,6 +73,7 @@ class Loader: @unchecked Sendable {
         descriptions, load the full SKILL.md from the listed directory to access the complete instructions.
         
         \(summaries)
+        ## --- ##
         """
     }
     
