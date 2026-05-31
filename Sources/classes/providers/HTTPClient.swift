@@ -10,7 +10,7 @@ import Foundation
 final class LLMClient: Sendable {
     static let shared = LLMClient()
     
-    enum LLMType {
+    enum LLMType: Codable {
         case ollama
 
         var url: String {

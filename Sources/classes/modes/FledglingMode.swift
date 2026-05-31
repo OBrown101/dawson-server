@@ -46,13 +46,13 @@ class FledglingMode: Mode {
     
     static func evaluateWrite(_ request: PermissionRequest, agent: Agent) -> PermissionEvaluation {
         guard let path = request.target else {
-            return PermissionEvaluation(request: request, decision: .denied(reason: "Missing write target path."))
+            return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Missing write target path."))
         }
 
         if (Utility.inSessionDirectories(path: path, directories: agent.directories)) {
             return PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Write operation requires user approval: \(path)"))
         } else {
-            return PermissionEvaluation(request: request, decision: .denied(reason: "Writes outside workspace are forbidden."))
+            return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Writes outside workspace are forbidden."))
         }
     }
     

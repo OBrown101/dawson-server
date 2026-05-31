@@ -32,9 +32,7 @@ actor AgentRunner {
 }
 
 
-class Agent {
-    static let primaryAgentUUID = "PRIMARY"
-    
+class Agent: Codable {
     let uuid: String
     let userUUID: String
     let llmType: LLMClient.LLMType
@@ -42,8 +40,9 @@ class Agent {
     var mode: ModeType
     let model: String
     var maxMessages: Int
-    var tools: [Tool]
+    var updatedTimestamp: Int64
     
+    private var tools: [Tool] = (Agent.requiredTools + Agent.optionalTools)
     private var history: [Message] = []
     var suspendData: SuspendData? = nil
     var directories: [String] = [DAWSON.root]
@@ -51,6 +50,11 @@ class Agent {
     var provider: LLMProvider
     let runner: AgentRunner
 
+    static let agentsDirectory = (DAWSON.workspace).appendingPathComponent("agents")
+    
+    static var optionalTools: [Tool] {
+        return [WriteFile(), SearchFile(), PatchFile(), ReplaceInFile(), ReadFile(), ListFiles(), Speak(), SelfConfig(), RichFormatter()]
+    }
     static var requiredTools: [Tool] {
         return [
             RequestUserInput(), EnvAwareness(), GetFullSkill(), GetSessionInfo(),
@@ -70,8 +74,7 @@ class Agent {
         mode: ModeType,
         model: String,
         maxMessages: Int,
-        history: [Message] = [],
-        tools: [Tool] = []
+        updatedTimestamp: Int64 = Int64(Date.now.timeIntervalSince1970)
     ) {
         self.uuid = uuid
         self.userUUID = userUUID
@@ -80,11 +83,52 @@ class Agent {
         self.mode = mode
         self.model = model
         self.maxMessages = maxMessages
-        self.history = history
-        self.tools = (Agent.requiredTools + tools)
-
+        self.updatedTimestamp = updatedTimestamp
+        
+        tools.append(contentsOf: tools)
         provider = Provider.provider(for: llmType)
         runner = AgentRunner()
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case uuid
+        case userUUID
+        case llmType
+        case type
+        case mode
+        case model
+        case maxMessages
+        case updatedTimestamp
+        // TODO: Need to add tools later
+    }
+    
+    required init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        uuid = try container.decode(String.self, forKey: .uuid)
+        userUUID = try container.decode(String.self, forKey: .userUUID)
+        llmType = try container.decode(LLMClient.LLMType.self, forKey: .llmType)
+        type = try container.decode(AgentType.self, forKey: .type)
+        mode = try container.decode(ModeType.self, forKey: .mode)
+        model = try container.decode(String.self, forKey: .model)
+        maxMessages = try container.decode(Int.self, forKey: .maxMessages)
+        updatedTimestamp = try container.decode(Int64.self, forKey: .updatedTimestamp)
+        
+        provider = Provider.provider(for: llmType)
+        runner = AgentRunner()
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(uuid, forKey: .uuid)
+        try container.encode(userUUID, forKey: .userUUID)
+        try container.encode(llmType, forKey: .llmType)
+        try container.encode(type, forKey: .type)
+        try container.encode(mode, forKey: .mode)
+        try container.encode(model, forKey: .model)
+        try container.encode(maxMessages, forKey: .maxMessages)
+        // TODO: Need to add tools later
     }
     
     func getHistory() -> [Message] {
@@ -155,7 +199,7 @@ class Agent {
                     continue
                     
                 case .denied(let reason):
-                    return .denied("Permission denied: \(reason)")
+                    return .denied(reason)
                     
                 case .requiresApproval(let reason):
                     let request = UserInputRequest(
@@ -188,19 +232,23 @@ class Agent {
         var newMessages: [Message] = []
 
         if (!systemPrompt.isEmpty) {
-            newMessages.append(Message(role: MsgSource.system.name, text: systemPrompt))
+            newMessages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: systemPrompt))
         }
 
-        let context = MempalaceMemory.shared.getPromptContext(query: userPrompt)
-        newMessages.append(Message(role: MsgSource.assistant.name, text: context))
-        newMessages.append(Message(role: MsgSource.user.name, text: userPrompt))
+        // SKIPPING FORCED CONTEXT GRAB FOR FURTHER TESTING
+//        let context = MempalaceMemory.shared.getPromptContext(query: userPrompt)
+//        newMessages.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: context))
+        newMessages.append(Message(runUUID: runUUID, role: MsgSource.user.name, text: userPrompt))
 
-        return await runInternalLoop(
+        let loopMessages = await runInternalLoop(
             runUUID: runUUID,
             startMessages: newMessages,
             useThinking: useThinking,
             onEvent: onEvent
         )
+        await runner.setRunning(false)
+        try? appendMessages(loopMessages, agentUUID: uuid)
+        return loopMessages
     }
     
     func resumeAgent(
@@ -219,7 +267,7 @@ class Agent {
         var toolCallIndex = suspendData.toolCallIndex
         
         if (userResponse.accepted == false) {
-            messages.append(Message(role: MsgSource.tool.name, text: "User denied request."))
+            messages.append(Message(runUUID: suspendData.runUUID, role: MsgSource.tool.name, text: "User denied request."))
         } else {
             guard let toolCalls = suspendData.toolCalls else {
                 throw AgentError.suspendMissingToolCalls
@@ -229,17 +277,17 @@ class Agent {
                 let tc = toolCalls[suspendData.toolCallIndex]
                 if (tc.name != RequestUserInput().name) {
                     let toolOutput = await executeTool(tc)
-                    messages.append(Message(role: MsgSource.tool.name, text: toolOutput))
+                    messages.append(Message(runUUID: suspendData.runUUID, role: MsgSource.tool.name, text: toolOutput))
                 } else {
                     let toolOutput = "User responded to request: '\(userResponse)'."
-                    messages.append(Message(role: MsgSource.tool.name, text: toolOutput))
+                    messages.append(Message(runUUID: suspendData.runUUID, role: MsgSource.tool.name, text: toolOutput))
                 }
                 
                 toolCallIndex = (suspendData.toolCallIndex + 1)
             }
         }
 
-        return await runInternalLoop(
+        let loopMessages = await runInternalLoop(
             runUUID: suspendData.runUUID,
             iterationIndex: suspendData.iterationIndex,
             startMessages: messages,
@@ -247,6 +295,9 @@ class Agent {
             existingToolCallIndex: toolCallIndex,
             onEvent: onEvent
         )
+        await runner.setRunning(false)
+        try? appendMessages(loopMessages, agentUUID: uuid)
+        return loopMessages
     }
     
     func runInternalLoop(
@@ -280,19 +331,18 @@ class Agent {
                     switch result {
                     case .completed(let output):
                         onEvent?(.toolResult(output), runUUID)
-                        toolResults.append(Message(role: MsgSource.tool.name, text: output))
+                        toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: output))
                         print("Tool result: completed.")
 
                     case .denied(let reason):
-                        let text = "Permission denied: \(reason)"
-                        onEvent?(.toolResult(text), runUUID)
-                        toolResults.append(Message(role: MsgSource.tool.name, text: text))
+                        onEvent?(.toolResult(reason), runUUID)
+                        toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: reason))
                         print("Tool result: denied -> \(reason)")
 
                     case .suspended(let request):
                         onEvent?(.userInputRequest(request), runUUID)
                         print("Tool result: requirest permission -> \(request.prompt)")
-                        toolResults.append(Message(role: MsgSource.tool.name, text: "__PENDING_USER_INPUT__"))
+                        toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "__PENDING_USER_INPUT__"))
                         newMessages.append(contentsOf: toolResults)
                         suspendSession(runUUID: runUUID, iterationIndex: iterations, messages: newMessages, userInputRequest: request, toolCallIndex: index, toolCalls: existingToolCalls)
                         return newMessages
@@ -320,7 +370,7 @@ class Agent {
                     }
                 }
             )
-            let responseMsg = Message.fromProvider(response)
+            let responseMsg = Message.fromProvider(response, runUUID: runUUID)
             newMessages.append(responseMsg)
 
             // No tools → final response
@@ -337,7 +387,7 @@ class Agent {
         }
 
         if (iterations >= modeIterations) {
-            let iterationMaxMsg = Message(role: MsgSource.assistant.name, text: "Reached main agent loop iteration limit, may not have completed tasks/tool-calls.")
+            let iterationMaxMsg = Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "Reached main agent loop iteration limit, may not have completed tasks/tool-calls.")
             newMessages.append(iterationMaxMsg)
         }
         return newMessages
@@ -355,9 +405,10 @@ extension Agent {
         var toolCallIndex: Int = 0
     }
     
-    enum AgentType {
+    enum AgentType: Codable {
         case dawson
         case squireBot
+        case page
         
         var name: String {
             switch (self) {
@@ -365,15 +416,19 @@ extension Agent {
                 "agent_dawson"
             case .squireBot:
                 "agent_squirebot"
+            case .page:
+                "agent_page"
             }
         }
         
-        var soulPath: String {
+        var soulPath: String? {
             switch (self) {
             case .dawson:
                 "/workspace/config/DAWSON_SOUL.md"
             case .squireBot:
                 "/workspace/config/SQUIREBOT_SOUL.md"
+            case .page:
+                nil
             }
         }
         
@@ -383,6 +438,8 @@ extension Agent {
                 return .dawson
             case self.squireBot.name:
                 return .squireBot
+            case self.page.name:
+                return .page
             default:
                 return nil
             }
@@ -407,5 +464,91 @@ extension Agent {
                 return "Agent suspended but missing tool calls"
             }
         }
+    }
+}
+
+extension Agent {
+    static func loadAllAgents() -> [Agent] {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: agentsDirectory, includingPropertiesForKeys: nil) else { return [] }
+
+        var agents: [Agent] = []
+        for fileURL in files {
+            guard (fileURL.pathExtension == "json"),
+                  let data = try? Data(contentsOf: fileURL),
+                  let agent = try? JSONDecoder().decode(Agent.self, from: data) else { continue }
+            
+            agent.history = loadHistory(agentUUID: agent.uuid)
+            agents.append(agent)
+        }
+        
+        return agents.sorted { ($0.history.last?.createdAt.timeIntervalSince1970 ?? 0) > ($1.history.last?.createdAt.timeIntervalSince1970 ?? 0) }
+    }
+    
+    static func loadAgent(agentUUID: String) -> Agent? {
+        let url = metadataURL(agentUUID: agentUUID)
+        guard let data = try? Data(contentsOf: url),
+              let agent = try? JSONDecoder().decode(Agent.self, from: data) else { return nil }
+        
+        agent.history = loadHistory(agentUUID: agentUUID)
+        return agent
+    }
+    
+    static func loadHistory(agentUUID: String) -> [Message] {
+        let fileURL = historyURL(agentUUID: agentUUID)
+        guard let contents = try? String(contentsOf: fileURL, encoding: .utf8) else { return [] }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        return contents
+            .split(separator: "\n")
+            .compactMap { line in
+                guard let data = line.data(using: .utf8) else { return nil }
+                return try? decoder.decode(Message.self, from: data)
+            }
+    }
+    
+    func saveMetadata() {
+        do {
+            try FileManager.default.createDirectory(at: Agent.agentsDirectory, withIntermediateDirectories: true)
+            
+            let data = try JSONEncoder().encode(self)
+            try data.write(to: Agent.metadataURL(agentUUID: uuid), options: .atomic)
+            print("Successfully saved Agent \(uuid) metadata")
+        } catch {
+            print("Failed to save Agent \(uuid) metadata: ", error)
+        }
+    }
+    
+    private static func metadataURL(agentUUID: String) -> URL {
+        return Agent.agentsDirectory.appendingPathComponent("metadata_\(agentUUID).json")
+    }
+
+    private static func historyURL(agentUUID: String) -> URL {
+        return Agent.agentsDirectory.appendingPathComponent("history_\(agentUUID).jsonl")
+    }
+    
+    private func appendMessages(_ messages: [Message], agentUUID: String) throws {
+        let fileURL = Agent.historyURL(agentUUID: agentUUID)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        
+        if !FileManager.default.fileExists(atPath: fileURL.path) {
+            FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+        }
+        
+        let handle = try FileHandle(forWritingTo: fileURL)
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        
+        for message in messages {
+            let jsonData = try encoder.encode(message)
+            handle.write(jsonData)
+            handle.write(Data("\n".utf8))
+        }
+    }
+    
+    private func appendMessage(_ message: Message, agentUUID: String) throws {
+        try appendMessages([message], agentUUID: agentUUID)
     }
 }

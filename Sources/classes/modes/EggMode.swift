@@ -19,15 +19,15 @@ class EggMode: Mode {
         for request in requests {
             switch request.action {
             case .all:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Full permission access is forbidden in this chat's mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Full permission access is forbidden in this chat's mode.")))
             case .read:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Reading files is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Reading files is forbidden in this chat's current mode.")))
             case .write:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Writing to files is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Writing to files is forbidden in this chat's current mode.")))
             case .command:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Command execution is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Command execution is forbidden in this chat's current mode.")))
             case .sudo:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Sudo access is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Sudo access is forbidden in this chat's current mode.")))
             }
         }
         return evaluations

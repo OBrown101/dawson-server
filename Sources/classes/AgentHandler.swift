@@ -12,17 +12,12 @@ class AgentHandler: @unchecked Sendable {
     
     static let defaultModel = "gpt-oss-20b-32k-16k"
     let defaultMaxMessage = 200
-    let primaryAgentUUID = "PRIMARY"
     
     private var activeAgents: [String: Agent] = [:]
 
     
     func getAgent(_ agentUUID: String) -> Agent? {
         return activeAgents[agentUUID]
-    }
-    
-    func spawnPrimaryAgent() {
-//        spawnAgent(uuid: primaryAgentUUID, type: .dawson, model: AgentHandler.defaultModel)     // Sets up primary Dawson agent
     }
     
     func spawnAgent(uuid: String, userUUID: String, type: Agent.AgentType, mode: ModeType = .egg, model: String = defaultModel) {
@@ -32,16 +27,13 @@ class AgentHandler: @unchecked Sendable {
             type: type,
             mode: mode,
             model: model,
-            maxMessages: defaultMaxMessage,
-            tools: [
-                WriteFile(), SearchFile(), PatchFile(), ReplaceInFile(), ReadFile(), ListFiles(), Speak(), SelfConfig(), RichFormatter()
-            ]
+            maxMessages: defaultMaxMessage
         )
         if (!activeAgents.keys.contains(uuid)) {
             activeAgents[uuid] = newAgent
-            print("New agent spawned: \(uuid)")
+            print("New agent (\(uuid)) spawned.")
         } else {
-            print("Agent already exists: \(uuid)")
+            print("Agent (\(uuid)) already exists.")
         }
     }
     
@@ -51,8 +43,7 @@ class AgentHandler: @unchecked Sendable {
         let systemPrompt = (agent.getHistory().isEmpty) ? Loader.shared.buildBaseSystemPrompt(agent: agent.type) : ""
         
         do {
-            let messages = try await agent.runAgent(userPrompt: prompt, systemPrompt: systemPrompt, onEvent: onEvent)
-            return messages
+            return try await agent.runAgent(userPrompt: prompt, systemPrompt: systemPrompt, onEvent: onEvent)
         } catch {
             print(error.localizedDescription)
             return []
@@ -66,8 +57,7 @@ class AgentHandler: @unchecked Sendable {
         }
 
         do {
-            let messages = try await agent.resumeAgent(userResponse: response, onEvent: onEvent)
-            return messages
+            return try await agent.resumeAgent(userResponse: response, onEvent: onEvent)
         } catch {
             print(error.localizedDescription)
             return []
