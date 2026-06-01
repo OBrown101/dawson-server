@@ -220,6 +220,7 @@ class Agent: Codable {
     }
 
     func runAgent(
+        runUUID: String,
         userPrompt: String,
         systemPrompt: String = "",
         useThinking: Bool = true,
@@ -228,7 +229,6 @@ class Agent: Codable {
         if await (runner.isRunning()) { throw AgentError.agentRunning }
         await runner.setRunning()
         
-        let runUUID = UUID().uuidString // Represents a specific prompt-response to allow piecing together chunks of a specific response into single text by clients
         var newMessages: [Message] = []
 
         if (!systemPrompt.isEmpty) {

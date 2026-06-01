@@ -8,6 +8,7 @@
 import Foundation
 
 struct Message: Codable {
+    let uuid: String
     let runUUID: String
     let createdAt: Date
     let model: String
@@ -15,7 +16,8 @@ struct Message: Codable {
     let text: String?
     let toolCalls: [ToolCall]?
     
-    init(runUUID: String, createdAt: Date = Date.now, model: String = "", role: String, text: String?, toolCalls: [ToolCall]? = nil) {
+    init(uuid: String = UUID().uuidString, runUUID: String, createdAt: Date = Date.now, model: String = "", role: String, text: String?, toolCalls: [ToolCall]? = nil) {
+        self.uuid = uuid
         self.runUUID = runUUID
         self.createdAt = createdAt
         self.model = model
@@ -27,6 +29,7 @@ struct Message: Codable {
     static func fromProvider(_ providerResponse: ProviderResponse, runUUID: String) -> Message {
         let createdAt = DateHandler.shared.iso8601Formatter.date(from: providerResponse.createdAt) ?? Date.now
         return Message(
+            
             runUUID: runUUID,
             createdAt: createdAt,
             model: providerResponse.model,

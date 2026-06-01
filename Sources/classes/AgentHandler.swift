@@ -37,13 +37,13 @@ class AgentHandler: @unchecked Sendable {
         }
     }
     
-    func runAgent(userUUID: String, agentUUID: String, prompt: String, onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil) async -> [Message] {
+    func runAgent(runUUID: String, userUUID: String, agentUUID: String, prompt: String, onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil) async -> [Message] {
         guard let agent = activeAgents[agentUUID] else { return [] }
         
         let systemPrompt = (agent.getHistory().isEmpty) ? Loader.shared.buildBaseSystemPrompt(agent: agent.type) : ""
         
         do {
-            return try await agent.runAgent(userPrompt: prompt, systemPrompt: systemPrompt, onEvent: onEvent)
+            return try await agent.runAgent(runUUID: runUUID, userPrompt: prompt, systemPrompt: systemPrompt, onEvent: onEvent)
         } catch {
             print(error.localizedDescription)
             return []

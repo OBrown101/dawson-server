@@ -112,11 +112,13 @@ extension WebSocketServer {
             }
             
             var dataIndex: [String: Int32] = [:]
-            await dawson.getChatResponse(chatUUID: userData.chatUUID, prompt: textPrompt,
+            var currentRunUUID: String? = nil
+            await dawson.getChatResponse(chatUUID: userData.chatUUID, runUUID: userData.dataUUID, prompt: textPrompt,
                 onEvent: { event, runUUID in
                     var dataType: AgentData.DataType
                     var payload: AnyCodable
                     let index = (dataIndex[event.key] ?? 0)
+                    currentRunUUID = runUUID
                     
                     switch event {
                     case .thinking(let text):
@@ -138,6 +140,7 @@ extension WebSocketServer {
                     case .userInputRequest(let prompt):
                         dataType = .userInputRequest
                         payload = AnyCodable(prompt)
+                        currentRunUUID = nil    // Input-request stops run-loop (to be resumed), can't permit sending "final message" index
                     }
                 
                     let agentData = AgentData(
@@ -155,6 +158,11 @@ extension WebSocketServer {
                     }
                 }
             )
+            
+            if let currentRunUUID = currentRunUUID {
+                let lastDataIndex: Int32 = (dataIndex[AgentEvent.content().key] ?? 1) - 1
+                sendAgentDataCompleted(runUUID: currentRunUUID, lastDataIndex: lastDataIndex, userUUID: userData.userUUID, agentUUID: userData.agentUUID, ws: ws)
+            }
         case .dataPrompt:
             break
         }
@@ -164,11 +172,13 @@ extension WebSocketServer {
         guard let dawson = dawson else { return }
         var dataIndex: [String: Int32] = [:]
 
+        var currentRunUUID: String? = nil
         await dawson.getChatResumedResponse(response: response,
             onEvent: { event, runUUID in
                 var dataType: AgentData.DataType
                 var payload: AnyCodable
                 let index = (dataIndex[event.key] ?? 0)
+                currentRunUUID = runUUID
 
                 switch event {
                 case .thinking(let text):
@@ -190,6 +200,7 @@ extension WebSocketServer {
                 case .userInputRequest(let request):
                     dataType = .userInputRequest
                     payload = AnyCodable(request)
+                    currentRunUUID = nil    // Input-request stops run-loop (to be resumed), can't permit sending "final message" index
                 }
 
                 let agentData = AgentData(
@@ -203,11 +214,17 @@ extension WebSocketServer {
 
                 let response = WSPacket(type: .agentData, payload: AnyCodable(agentData))
                 dataIndex[event.key] = (index + 1)
+                
                 Task {
                     await self.send(response, ws: ws)
                 }
             }
         )
+        
+        if let currentRunUUID = currentRunUUID {
+            let lastDataIndex: Int32 = (dataIndex[AgentEvent.content().key] ?? 1) - 1
+            sendAgentDataCompleted(runUUID: currentRunUUID, lastDataIndex: lastDataIndex, userUUID: response.userUUID, agentUUID: response.agentUUID, ws: ws)
+        }
     }
     
     private func handleChatData(_ chatData: ChatData, ws: WebSocket) async {
@@ -275,6 +292,24 @@ extension WebSocketServer {
             Task {
                 await self.send(response, ws: ws)
             }
+        }
+    }
+}
+
+extension WebSocketServer {
+    private func sendAgentDataCompleted(runUUID: String, lastDataIndex: Int32?, userUUID: String, agentUUID: String, ws: WebSocket) {
+        let agentData = AgentData(
+            dataUUID: runUUID,
+            dataIndex: 0,
+            agentUUID: agentUUID,
+            userUUID: userUUID,
+            dataType: .dataLastIndex,
+            payload: AnyCodable(lastDataIndex)
+        )
+
+        let response = WSPacket(type: .agentData, payload: AnyCodable(agentData))
+        Task {
+            await self.send(response, ws: ws)
         }
     }
 }
