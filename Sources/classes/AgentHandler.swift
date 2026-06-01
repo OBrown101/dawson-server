@@ -15,6 +15,11 @@ class AgentHandler: @unchecked Sendable {
     
     private var activeAgents: [String: Agent] = [:]
 
+    init() {
+        let savedAgents = Agent.loadAllAgents()
+        activeAgents = Dictionary(uniqueKeysWithValues: savedAgents.map { ($0.uuid, $0) })
+        print("Loaded Chats: \(savedAgents)")
+    }
     
     func getAgent(_ agentUUID: String) -> Agent? {
         return activeAgents[agentUUID]
@@ -31,6 +36,7 @@ class AgentHandler: @unchecked Sendable {
         )
         if (!activeAgents.keys.contains(uuid)) {
             activeAgents[uuid] = newAgent
+            newAgent.saveMetadata()
             print("New agent (\(uuid)) spawned.")
         } else {
             print("Agent (\(uuid)) already exists.")
