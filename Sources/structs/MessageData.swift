@@ -9,6 +9,7 @@ import Foundation
 import AnyCodable
 
 struct MessageData: Codable, Equatable {
+    let uuid: String
     let runUUID: String
     let timestamp: Int64
     let chatUUID: String?
@@ -27,6 +28,7 @@ struct MessageData: Codable, Equatable {
         if ((message.role != MsgSource.user.name) && (message.role != MsgSource.assistant.name)) { return nil }
         
         return MessageData(
+            uuid: message.uuid,
             runUUID: message.runUUID,
             timestamp: Int64(message.createdAt.timeIntervalSince1970 * 1000),
             chatUUID: chatUUID,

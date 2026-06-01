@@ -9,6 +9,7 @@ import Foundation
 import AnyCodable
 
 struct UserData: Codable {
+    let dataUUID: String
     let chatUUID: String
     let agentUUID: String
     let userUUID: String

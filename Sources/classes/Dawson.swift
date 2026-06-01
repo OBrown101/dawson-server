@@ -50,8 +50,8 @@ class DAWSON: @unchecked Sendable {
         return activeChats[chatUUID]?.messages ?? []
     }
     
-    func getChatResponse(chatUUID: String, prompt: String, onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil) async {
-        await activeChats[chatUUID]?.getResponse(prompt: prompt, onEvent: onEvent)
+    func getChatResponse(chatUUID: String, runUUID: String, prompt: String, onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil) async {
+        await activeChats[chatUUID]?.getResponse(runUUID: runUUID, prompt: prompt, onEvent: onEvent)
     }
     
     func getChatResumedResponse(response: UserInputResponse, onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil) async {

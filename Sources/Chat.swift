@@ -49,8 +49,8 @@ class Chat: Codable {
         try container.encode(updatedTimestamp, forKey: .updatedTimestamp)
     }
     
-    func getResponse(prompt: String, onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil) async {
-        let newMessages = await AgentHandler.shared.runAgent(userUUID: userUUID, agentUUID: agentUUID, prompt: prompt, onEvent: onEvent)
+    func getResponse(runUUID: String, prompt: String, onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil) async {
+        let newMessages = await AgentHandler.shared.runAgent(runUUID: runUUID, userUUID: userUUID, agentUUID: agentUUID, prompt: prompt, onEvent: onEvent)
         let messageDatas = newMessages.compactMap({ MessageData.fromMessage($0, chatUUID: uuid, userUUID: userUUID, agentUUID: agentUUID) })
         addNewMessageDatas(messageDatas)
     }
