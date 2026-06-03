@@ -19,6 +19,7 @@ struct WSPacket: Codable {
         case userData = "USER_DATA"
         case agentData = "AGENT_DATA"
         case chatData = "CHAT_DATA"
+        case configData = "CONFIG_DATA"
         case userInputRequest = "USER_INPUT_REQUEST"
         case userInputRequestResponse = "USER_INPUT_REQUEST_RESPONSE"
         case error = "ERROR"
@@ -57,28 +58,20 @@ final class WebSocketServer: @unchecked Sendable {
             await send(WSPacket(type: .pong, payload: "pong"), ws: ws)
             
         case .userData:
-            guard let payloadData = try? JSONSerialization.data(withJSONObject: packet.payload.value),
-                  let userData = try? JSONDecoder().decode(UserData.self, from: payloadData) else {
-                await send(WSPacket(type: .error, payload: "Invalid \(packet.type.rawValue) payload"), ws: ws)
-                return
-            }
-            await handleUserData(userData, ws: ws)
+            guard let payload: UserData = await guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
+            await handleUserData(payload, ws: ws)
 
         case .chatData:
-            guard let payloadData = try? JSONSerialization.data(withJSONObject: packet.payload.value),
-                  let chatData = try? JSONDecoder().decode(ChatData.self, from: payloadData) else {
-                await send(WSPacket(type: .error, payload: "Invalid \(packet.type.rawValue) payload"), ws: ws)
-                return
-            }
-            await handleChatData(chatData, ws: ws)
+            guard let payload: ChatData = await guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
+            await handleChatData(payload, ws: ws)
             
         case .userInputRequestResponse:
-            guard let payloadData = try? JSONSerialization.data(withJSONObject: packet.payload.value),
-                  let response = try? JSONDecoder().decode(UserInputResponse.self, from: payloadData) else {
-                await send(WSPacket(type: .error, payload: "Invalid \(packet.type.rawValue) payload"), ws: ws)
-                return
-            }
-            await handleUserInputResponse(response, ws: ws)
+            guard let payload: UserInputResponse = await guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
+            await handleUserInputResponse(payload, ws: ws)
+            
+        case .configData:
+            guard let payload: ConfigData = await guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
+            await handleConfigData(payload, ws: ws)
             
         default:
             await send(WSPacket(type: .error, payload: "Unknown packet type"), ws: ws)
@@ -106,10 +99,7 @@ extension WebSocketServer {
         guard let dawson = dawson else { return }
         switch (userData.dataType) {
         case .textPrompt:
-            guard let textPrompt = userData.payload.value as? String else {
-                await send(WSPacket(type: .error, payload: "Invalid \(userData.dataType.rawValue) payload"), ws: ws)
-                return
-            }
+            guard let textPrompt: String = await guardPayload(userData.payload, dataType: userData.dataType.rawValue, ws: ws) else { return }
             
             var dataIndex: [String: Int32] = [:]
             var currentRunUUID: String? = nil
@@ -232,18 +222,11 @@ extension WebSocketServer {
         
         switch (chatData.dataType) {
         case .upsert:
-            guard let payloadData = try? JSONSerialization.data(withJSONObject: chatData.payload.value),
-                  let chat = try? JSONDecoder().decode(Chat.self, from: payloadData) else {
-                await send(WSPacket(type: .error, payload: "Invalid \(chatData.dataType.rawValue) payload"), ws: ws)
-                return
-            }
+            guard let chat: Chat = await guardPayload(chatData.payload, dataType: chatData.dataType.rawValue, ws: ws) else { return }
             dawson.upsertChat(chat)
             
         case .delete:
-            guard let chatUUID = chatData.payload.value as? String else {
-                await send(WSPacket(type: .error, payload: "Invalid \(chatData.dataType.rawValue) payload"), ws: ws)
-                return
-            }
+            guard let chatUUID: String = await guardPayload(chatData.payload, dataType: chatData.dataType.rawValue, ws: ws) else { return }
             dawson.deleteChat(chatUUID)
             
         case .syncChat:
@@ -294,6 +277,25 @@ extension WebSocketServer {
             }
         }
     }
+    
+    private func handleConfigData(_ configData: ConfigData, ws: WebSocket) async {
+        switch (configData.dataType) {
+        case .updateAgent:
+            guard let agentConfig: AgentConfigData = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
+            AgentHandler.shared.updateAgent(agentConfig: agentConfig)
+            
+        case .deleteAgent:
+            // Unsure yet if will allow client to remove agent(s), will need be safeguarded since can break subagents
+            
+        case .upsertUser:
+            guard let user: User = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
+            UserHandler.shared.upsertUser(user)
+            
+        case .deleteUser:
+            guard let userUUID: String = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
+            UserHandler.shared.deleteUser(userUUID)
+        }
+    }
 }
 
 extension WebSocketServer {
@@ -311,5 +313,14 @@ extension WebSocketServer {
         Task {
             await self.send(response, ws: ws)
         }
+    }
+    
+    private func guardPayload<T: Decodable>(_ payload: AnyCodable, dataType: String, ws: WebSocket) async -> T? {
+        guard let payloadData = try? JSONSerialization.data(withJSONObject: payload.value),
+              let object = try? JSONDecoder().decode(T.self, from: payloadData) else {
+            await send(WSPacket(type: .error, payload: "Invalid \(dataType) payload"), ws: ws)
+            return nil
+        }
+        return object
     }
 }

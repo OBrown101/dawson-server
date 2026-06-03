@@ -38,7 +38,7 @@ class Agent: Codable {
     let llmType: LLMClient.LLMType
     let type: AgentType
     var mode: ModeType
-    let model: String
+    var model: String
     var maxMessages: Int
     var updatedTimestamp: Int64
     
@@ -377,7 +377,8 @@ class Agent: Codable {
             guard let toolCalls = responseMsg.toolCalls,
                   (!toolCalls.isEmpty) else {
                 history.append(contentsOf: newMessages)
-                MempalaceMemory.shared.addConvHistory(messages: newMessages, agent: type)
+                // SKIPPING FORCED HISTORY SAVE FOR FURTHER TESTING
+//                MempalaceMemory.shared.addConvHistory(messages: newMessages, agent: type)
                 return newMessages
             }
 
@@ -405,10 +406,10 @@ extension Agent {
         var toolCallIndex: Int = 0
     }
     
-    enum AgentType: Codable {
-        case dawson
-        case squireBot
-        case page
+    enum AgentType: String, Codable {
+        case dawson = "DAWSON"
+        case squireBot = "SQUIREBOT"
+        case page = "PAGE"
         
         var name: String {
             switch (self) {
@@ -517,6 +518,23 @@ extension Agent {
             print("Successfully saved Agent \(uuid) metadata")
         } catch {
             print("Failed to save Agent \(uuid) metadata: ", error)
+        }
+    }
+    
+    func deleteAll() {
+        let metaURL = Agent.metadataURL(agentUUID: uuid)
+        let historyURL = Agent.historyURL(agentUUID: uuid)
+
+        do {
+            if FileManager.default.fileExists(atPath: metaURL.path) {
+                try FileManager.default.removeItem(at: metaURL)
+            }
+            if FileManager.default.fileExists(atPath: historyURL.path) {
+                try FileManager.default.removeItem(at: historyURL)
+            }
+            print("Successfully deleted Agent \(uuid) data")
+        } catch {
+            print("Failed to delete Agent \(uuid) data: ", error)
         }
     }
     
