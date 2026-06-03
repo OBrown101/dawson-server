@@ -21,6 +21,34 @@ class AgentHandler: @unchecked Sendable {
         print("Loaded Chats: \(savedAgents)")
     }
     
+    func updateAgent(agentConfig: AgentConfigData) {
+        let uuid = agentConfig.agentUUID
+        activeAgents[uuid]?.mode = agentConfig.mode
+        activeAgents[uuid]?.model = agentConfig.model
+        activeAgents[uuid]?.directories = agentConfig.directories
+        activeAgents[uuid]?.updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
+        activeAgents[uuid]?.saveMetadata()
+    }
+    
+    func deleteAgent(_ agentUUID: String) {
+        activeAgents[agentUUID]?.deleteAll()
+        activeAgents.removeValue(forKey: agentUUID)
+        print("Agent (\(agentUUID) deleted.")
+        // TODO: Notification to sync user devices
+    }
+    
+    func deleteAgentsForUser(_ userUUID: String) {
+        let agentUUIDs = activeAgents.values.filter({ $0.userUUID == userUUID }).map({ $0.uuid })
+        agentUUIDs.forEach { uuid in
+            deleteAgent(uuid)
+        }
+    }
+    
+    func setAgentMode(_ agentUUID: String, mode: ModeType) {
+        activeAgents[agentUUID]?.mode = mode
+        activeAgents[agentUUID]?.saveMetadata()
+    }
+    
     func getAgent(_ agentUUID: String) -> Agent? {
         return activeAgents[agentUUID]
     }

@@ -107,15 +107,26 @@ extension DAWSON {
     
     func updateChat(_ chat: Chat) {
         // Currently no other chat info, this is where settings, etc. would be updated
-        
+        activeChats[chat.uuid]?.updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
         print("Chat (\(chat.uuid) updated.")
         // broadcastChat(chat)
     }
     
     func deleteChat(_ chatUUID: String) {
+        activeChats[chatUUID]?.deleteAll()
+        if let agentUUID = activeChats[chatUUID]?.agentUUID {
+            AgentHandler.shared.deleteAgent(agentUUID)
+        }
         activeChats.removeValue(forKey: chatUUID)
         print("Chat (\(chatUUID) deleted.")
         // TODO: Notification to sync user devices
+    }
+    
+    func deleteChatsForUser(_ userUUID: String) {
+        let chatUUIDs = activeChats.values.filter({ $0.userUUID == userUUID }).map({ $0.uuid })
+        chatUUIDs.forEach { uuid in
+            deleteChat(uuid)
+        }
     }
 }
 

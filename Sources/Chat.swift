@@ -11,7 +11,7 @@ class Chat: Codable {
     let uuid: String
     let userUUID: String
     let agentUUID: String
-    let updatedTimestamp: Int64
+    var updatedTimestamp: Int64
     
     static let chatsDirectory = DAWSON.workspace.appendingPathComponent("chats")
     
@@ -123,6 +123,23 @@ extension Chat {
             print("Successfully saved Chat \(uuid) metadata")
         } catch {
             print("Failed to save Chat \(uuid) metadata: ", error)
+        }
+    }
+    
+    func deleteAll() {
+        let metaURL = Chat.metadataURL(chatUUID: uuid)
+        let msgsURL = Chat.messagesURL(chatUUID: uuid)
+
+        do {
+            if FileManager.default.fileExists(atPath: metaURL.path) {
+                try FileManager.default.removeItem(at: metaURL)
+            }
+            if FileManager.default.fileExists(atPath: msgsURL.path) {
+                try FileManager.default.removeItem(at: msgsURL)
+            }
+            print("Successfully deleted Chat \(uuid) data")
+        } catch {
+            print("Failed to delete Chat \(uuid) data: ", error)
         }
     }
     
