@@ -10,7 +10,32 @@ import Foundation
 class MempalaceGetAAAKSpec: Tool {
     let name = "mempalace_get_aaak_spec"
     
-    func schema() -> [String: Any] {
+    func openAISchema() -> [String : Any] {
+        return [
+            "type": "function",
+            "name": name,
+            "description": "Get the AAAK dialect specification — the compressed memory format MemPalace uses. Call this if you need to read or write AAAK-compressed memories.",
+            "parameters": [
+                "type": "object",
+                "properties": [:],
+                "required": []
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Get the AAAK dialect specification — the compressed memory format MemPalace uses. Call this if you need to read or write AAAK-compressed memories.",
+            "input_schema": [
+                "type": "object",
+                "properties": [:],
+                "required": []
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

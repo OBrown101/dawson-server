@@ -11,8 +11,51 @@ import AppKit
 
 class Speak: Tool {
     let name = "system_speak"
-
-    func schema() -> [String: Any] {
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "type": "function",
+            "name": name,
+            "description": "Uses the system's built-in TTS to speak text.",
+            "parameters": [
+                "type": "object",
+                "required": ["text"],
+                "properties": [
+                    "text": [
+                        "type": "string",
+                        "description": "Text to speak"
+                    ],
+                    "voice": [
+                        "type": "string",
+                        "description": "Optional voice name if supported by OS"
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Uses the system's built-in TTS to speak text.",
+            "input_schema": [
+                "type": "object",
+                "required": ["text"],
+                "properties": [
+                    "text": [
+                        "type": "string",
+                        "description": "Text to speak"
+                    ],
+                    "voice": [
+                        "type": "string",
+                        "description": "Optional voice name if supported by OS"
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

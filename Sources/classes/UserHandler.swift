@@ -19,6 +19,10 @@ class UserHandler: @unchecked Sendable {
         print("Loaded Users: \(savedUsers)")
     }
     
+    func getUsers() -> [User] {
+        return activeUsers.values.map { $0 }
+    }
+    
     func upsertUser(_ user: User) {
         if (!activeUsers.keys.contains(user.uuid)) {
             createUser(user)

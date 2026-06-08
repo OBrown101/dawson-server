@@ -9,8 +9,69 @@ import Foundation
 
 class MempalaceTool: Tool {
     let name = "mempalace"
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "type": "function",
+            "name": name,
+            "description": """
+            Interface to the Mempalace MCP memory system.
+            Used for storing, retrieving, and searching long-term memory, conversation history, and semantic context.
 
-    func schema() -> [String: Any] {
+            This tool routes requests to a Mempalace MCP server that is already setup. DO NOT register this server, it is already setup and running.
+            """,
+            "parameters": [
+                "type": "object",
+                "required": ["action"],
+                "properties": [
+                    "action": [
+                        "type": "string",
+                        "description": """
+                        The Mempalace operation to perform.
+                        Examples: mempalace_add_drawer, mempalace_search, mempalace_status
+                        """
+                    ],
+                    "args": [
+                        "type": "object",
+                        "description": "Arguments forwarded directly to the Mempalace MCP tool",
+                        "additionalProperties": true
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": """
+            Interface to the Mempalace MCP memory system.
+            Used for storing, retrieving, and searching long-term memory, conversation history, and semantic context.
+
+            This tool routes requests to a Mempalace MCP server that is already setup. DO NOT register this server, it is already setup and running.
+            """,
+            "input_schema": [
+                "type": "object",
+                "required": ["action"],
+                "properties": [
+                    "action": [
+                        "type": "string",
+                        "description": """
+                        The Mempalace operation to perform.
+                        Examples: mempalace_add_drawer, mempalace_search, mempalace_status
+                        """
+                    ],
+                    "args": [
+                        "type": "object",
+                        "description": "Arguments forwarded directly to the Mempalace MCP tool",
+                        "additionalProperties": true
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

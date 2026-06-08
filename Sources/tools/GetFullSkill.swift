@@ -9,8 +9,46 @@ import Foundation
 
 class GetFullSkill: Tool {
     let name = "get_full_skill"
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": """
+            Loads the full contents of a skill's SKILL.md file using the skill name. Use this when a task matches one of the available skill summaries and the agent needs the detailed instructions.
+            """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "skill_name": [
+                        "type": "string",
+                        "description": "The exact name of the skill to load"
+                    ]
+                ],
+                "required": ["skill_name"]
+            ]
+        ]
+    }
 
-    func schema() -> [String: Any] {
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": """
+            Loads the full contents of a skill's SKILL.md file using the skill name. Use this when a task matches one of the available skill summaries and the agent needs the detailed instructions.
+            """,
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "skill_name": [
+                        "type": "string",
+                        "description": "The exact name of the skill to load"
+                    ]
+                ],
+                "required": ["skill_name"]
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

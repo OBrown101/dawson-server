@@ -10,7 +10,42 @@ import Foundation
 class MempalaceDeleteDrawer: Tool {
     let name = "mempalace_delete_drawer"
     
-    func schema() -> [String: Any] {
+    func openAISchema() -> [String : Any] {
+        return [
+            "type": "function",
+            "name": name,
+            "description": "Delete a drawer by ID. Irreversible.",
+            "parameters": [
+                "type": "object",
+                "required": ["drawer_id"],
+                "properties": [
+                    "drawer_id": [
+                        "type": "string",
+                        "description": "ID of the drawer to delete"
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Delete a drawer by ID. Irreversible.",
+            "input_schema": [
+                "type": "object",
+                "required": ["drawer_id"],
+                "properties": [
+                    "drawer_id": [
+                        "type": "string",
+                        "description": "ID of the drawer to delete"
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

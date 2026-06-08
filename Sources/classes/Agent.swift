@@ -35,7 +35,7 @@ actor AgentRunner {
 class Agent: Codable {
     let uuid: String
     let userUUID: String
-    let llmType: LLMClient.LLMType
+    let llmType: ProviderClient.ProviderType
     let type: AgentType
     var mode: ModeType
     var model: String
@@ -45,7 +45,7 @@ class Agent: Codable {
     private var tools: [Tool] = (Agent.requiredTools + Agent.optionalTools)
     private var history: [Message] = []
     var suspendData: SuspendData? = nil
-    var directories: [String] = [DAWSON.root]
+    var directories: [String] = [DAWSON.root.path]
     
     var provider: LLMProvider
     let runner: AgentRunner
@@ -69,7 +69,7 @@ class Agent: Codable {
     init(
         uuid: String,
         userUUID: String,
-        llmType: LLMClient.LLMType = .ollama,
+        llmType: ProviderClient.ProviderType = .ollama,
         type: AgentType,
         mode: ModeType,
         model: String,
@@ -107,7 +107,7 @@ class Agent: Codable {
 
         uuid = try container.decode(String.self, forKey: .uuid)
         userUUID = try container.decode(String.self, forKey: .userUUID)
-        llmType = try container.decode(LLMClient.LLMType.self, forKey: .llmType)
+        llmType = try container.decode(ProviderClient.ProviderType.self, forKey: .llmType)
         type = try container.decode(AgentType.self, forKey: .type)
         mode = try container.decode(ModeType.self, forKey: .mode)
         model = try container.decode(String.self, forKey: .model)

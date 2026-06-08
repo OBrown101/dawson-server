@@ -19,8 +19,50 @@ class PatchFile: PermissionAware {
             PermissionRequest(action: .write, target: diff)
         ]
     }
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Applies a simple unified diff patch to a file. Supports a single hunk.",
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "path": [
+                        "type": "string",
+                        "description": "The file to patch"
+                    ],
+                    "diff": [
+                        "type": "string",
+                        "description": "A unified diff patch"
+                    ]
+                ],
+                "required": ["path", "diff"]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Applies a simple unified diff patch to a file. Supports a single hunk.",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "path": [
+                        "type": "string",
+                        "description": "The file to patch"
+                    ],
+                    "diff": [
+                        "type": "string",
+                        "description": "A unified diff patch"
+                    ]
+                ],
+                "required": ["path", "diff"]
+            ]
+        ]
+    }
 
-    func schema() -> [String: Any] {
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

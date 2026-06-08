@@ -13,8 +13,12 @@ class DAWSON: @unchecked Sendable {
     
     let server: WebSocketServer
 
-    static let root = FileManager.default.currentDirectoryPath
-    static let workspace = URL(fileURLWithPath: DAWSON.root).appendingPathComponent("workspace")
+    static let root = FileManager.default
+        .homeDirectoryForCurrentUser
+        .appendingPathComponent("DAWSON")
+
+    static let workspace = DAWSON.root
+        .appendingPathComponent("workspace")
 
     static let primaryChatUUID = "PRIMARY_CHAT"
     static let primaryAgentUUID = "PRIMARY_AGENT"
@@ -107,6 +111,8 @@ extension DAWSON {
     
     func updateChat(_ chat: Chat) {
         // Currently no other chat info, this is where settings, etc. would be updated
+        activeChats[chat.uuid]?.title = chat.title
+        activeChats[chat.uuid]?.subtitle = chat.subtitle
         activeChats[chat.uuid]?.updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
         print("Chat (\(chat.uuid) updated.")
         // broadcastChat(chat)

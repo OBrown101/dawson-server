@@ -17,7 +17,69 @@ class RunPythonScript: PermissionAware {
         ]
     }
     
-    func schema() -> [String: Any] {
+    func openAISchema() -> [String: Any] {
+        return [
+            "name": name,
+            "description":
+                """
+                Executes a Python function from a specified module using PythonHandler and returns the result. \
+                This does not execute modules/functions using the host computer's Python; it utilizes the \
+                Python venv environment in the DAWSON root directory.
+                """,
+            "parameters": [
+                "type": "object",
+                "required": ["module", "function"],
+                "properties": [
+                    "module": [
+                        "type": "string",
+                        "description": "The Python module name to import (e.g. 'mymodule')"
+                    ],
+                    "function": [
+                        "type": "string",
+                        "description": "The function name inside the module to execute"
+                    ],
+                    "args": [
+                        "type": "object",
+                        "description": "Dictionary of arguments passed to the Python function",
+                        "additionalProperties": true
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String: Any] {
+        return [
+            "name": name,
+            "description":
+                """
+                Executes a Python function from a specified module using PythonHandler and returns the result. \
+                This does not execute modules/functions using the host computer's Python; it utilizes the \
+                Python venv environment in the DAWSON root directory.
+                """,
+            "input_schema": [
+                "type": "object",
+                "required": ["module", "function"],
+                "properties": [
+                    "module": [
+                        "type": "string",
+                        "description": "The Python module name to import (e.g. 'mymodule')"
+                    ],
+                    "function": [
+                        "type": "string",
+                        "description": "The function name inside the module to execute"
+                    ],
+                    "args": [
+                        "type": "object",
+                        "description": "Dictionary of arguments passed to the Python function",
+                        "additionalProperties": true
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

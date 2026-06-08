@@ -13,16 +13,66 @@ class ReplaceInFile: PermissionAware {
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
         guard let path = args["path"] as? String,
                 !path.isEmpty else { return [] }
-        guard let old = args["old"] as? String else { return [] }
-        guard let new = args["new"] as? String else { return [] }
+        guard let _ = args["old"] as? String else { return [] }
+        guard let _ = args["new"] as? String else { return [] }
         
         return [
             PermissionRequest(action: .read, target: path),
             PermissionRequest(action: .write, target: path, requirement: .userApproval, reason: "Modify file at '\(path)'.")
         ]
     }
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Replaces the first occurrence of exact text in a file.",
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "path": [
+                        "type": "string",
+                        "description": "The file to modify"
+                    ],
+                    "old": [
+                        "type": "string",
+                        "description": "The exact text to replace"
+                    ],
+                    "new": [
+                        "type": "string",
+                        "description": "The replacement text"
+                    ]
+                ],
+                "required": ["path", "old", "new"]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Replaces the first occurrence of exact text in a file.",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "path": [
+                        "type": "string",
+                        "description": "The file to modify"
+                    ],
+                    "old": [
+                        "type": "string",
+                        "description": "The exact text to replace"
+                    ],
+                    "new": [
+                        "type": "string",
+                        "description": "The replacement text"
+                    ]
+                ],
+                "required": ["path", "old", "new"]
+            ]
+        ]
+    }
 
-    func schema() -> [String: Any] {
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

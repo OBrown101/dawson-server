@@ -18,8 +18,71 @@ class SearchFile: PermissionAware {
         
         return [PermissionRequest(action: .read, target: path)]
     }
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "type": "function",
+            "name": name,
+            "description": "Searches recursively for text within files and returns matching lines with file paths and line numbers.",
+            "parameters": [
+                "type": "object",
+                "required": ["pattern", "path"],
+                "properties": [
+                    "pattern": [
+                        "type": "string",
+                        "description": "The text to search for"
+                    ],
+                    "path": [
+                        "type": "string",
+                        "description": "The root directory or file to search"
+                    ],
+                    "case_sensitive": [
+                        "type": "boolean",
+                        "description": "Whether search is case sensitive",
+                        "default": false
+                    ],
+                    "max_results": [
+                        "type": "integer",
+                        "description": "Maximum number of matches to return",
+                        "default": 100
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Searches recursively for text within files and returns matching lines with file paths and line numbers.",
+            "input_schema": [
+                "type": "object",
+                "required": ["pattern", "path"],
+                "properties": [
+                    "pattern": [
+                        "type": "string",
+                        "description": "The text to search for"
+                    ],
+                    "path": [
+                        "type": "string",
+                        "description": "The root directory or file to search"
+                    ],
+                    "case_sensitive": [
+                        "type": "boolean",
+                        "description": "Whether search is case sensitive",
+                        "default": false
+                    ],
+                    "max_results": [
+                        "type": "integer",
+                        "description": "Maximum number of matches to return",
+                        "default": 100
+                    ]
+                ]
+            ]
+        ]
+    }
 
-    func schema() -> [String: Any] {
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

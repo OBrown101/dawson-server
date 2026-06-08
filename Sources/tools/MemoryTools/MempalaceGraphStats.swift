@@ -10,7 +10,31 @@ import Foundation
 class MempalaceGraphStats: Tool {
     let name = "mempalace_graph_stats"
     
-    func schema() -> [String: Any] {
+    func openAISchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Palace graph overview: total rooms, tunnel connections, edges between wings.",
+            "parameters": [
+                "type": "object",
+                "properties": [:],
+                "required": []
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Palace graph overview: total rooms, tunnel connections, edges between wings.",
+            "input_schema": [
+                "type": "object",
+                "properties": [:],
+                "required": []
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

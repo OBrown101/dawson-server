@@ -10,7 +10,31 @@ import Foundation
 class MempalaceKgStats: Tool {
     let name = "mempalace_kg_stats"
     
-    func schema() -> [String: Any] {
+    func openAISchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Knowledge graph overview: entities, triples, current vs expired facts, relationship types.",
+            "parameters": [
+                "type": "object",
+                "properties": [:],
+                "required": []
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Knowledge graph overview: entities, triples, current vs expired facts, relationship types.",
+            "input_schema": [
+                "type": "object",
+                "properties": [:],
+                "required": []
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

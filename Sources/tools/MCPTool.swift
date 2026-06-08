@@ -51,8 +51,115 @@ class MCPTool: PermissionAware {
             }
         }
     }
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "type": "function",
+            "name": name,
+            "description": """
+            Interact with any connected Model Context Protocol (MCP) server.
 
-    func schema() -> [String: Any] {
+            Use this tool to:
+            - List all connected MCP servers
+            - List all tools available on a specific MCP server
+            - Call a tool on a specific MCP server with arguments
+            - Register a new MCP server
+
+            This allows the agent to dynamically use capabilities provided by
+            external applications and services connected through MCP.
+            """,
+            "parameters": [
+                "type": "object",
+                "required": ["action"],
+                "properties": [
+                    "action": [
+                        "type": "string",
+                        "enum": [
+                            MCPAction.listServers.rawValue,
+                            MCPAction.listTools.rawValue,
+                            MCPAction.callTool.rawValue,
+                            MCPAction.registerServer.rawValue
+                        ],
+                        "description": """
+                        The action to perform:
+                        - \(MCPAction.listServers.rawValue): \(MCPAction.listServers.description)
+                        - \(MCPAction.listTools.rawValue): \(MCPAction.listTools.description)
+                        - \(MCPAction.callTool.rawValue): \(MCPAction.callTool.description)
+                        - \(MCPAction.registerServer.rawValue): \(MCPAction.registerServer.description)
+                        """
+                    ],
+                    "server_name": [
+                        "type": "string",
+                        "description": "The name of the MCP server."
+                    ],
+                    "tool_name": [
+                        "type": "string",
+                        "description": "The name of the tool to call."
+                    ],
+                    "arguments": [
+                        "type": "object",
+                        "description": "Arguments for given MCP tool call or other MCP control action.",
+                        "additionalProperties": true
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": """
+            Interact with any connected Model Context Protocol (MCP) server.
+
+            Use this tool to:
+            - List all connected MCP servers
+            - List all tools available on a specific MCP server
+            - Call a tool on a specific MCP server with arguments
+            - Register a new MCP server
+
+            This allows the agent to dynamically use capabilities provided by
+            external applications and services connected through MCP.
+            """,
+            "input_schema": [
+                "type": "object",
+                "required": ["action"],
+                "properties": [
+                    "action": [
+                        "type": "string",
+                        "enum": [
+                            MCPAction.listServers.rawValue,
+                            MCPAction.listTools.rawValue,
+                            MCPAction.callTool.rawValue,
+                            MCPAction.registerServer.rawValue
+                        ],
+                        "description": """
+                        The action to perform:
+                        - \(MCPAction.listServers.rawValue): \(MCPAction.listServers.description)
+                        - \(MCPAction.listTools.rawValue): \(MCPAction.listTools.description)
+                        - \(MCPAction.callTool.rawValue): \(MCPAction.callTool.description)
+                        - \(MCPAction.registerServer.rawValue): \(MCPAction.registerServer.description)
+                        """
+                    ],
+                    "server_name": [
+                        "type": "string",
+                        "description": "The name of the MCP server."
+                    ],
+                    "tool_name": [
+                        "type": "string",
+                        "description": "The name of the tool to call."
+                    ],
+                    "arguments": [
+                        "type": "object",
+                        "description": "Arguments for given MCP tool call or other MCP control action.",
+                        "additionalProperties": true
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

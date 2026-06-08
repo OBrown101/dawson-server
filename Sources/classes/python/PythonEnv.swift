@@ -12,7 +12,7 @@ final class PythonEnv: @unchecked Sendable {
     static let pythonVersionBasic = pythonVersion.replacingOccurrences(of: ".", with: "")
     
     #if os(macOS)
-    static let pythonHome = URL(fileURLWithPath: DAWSON.root)
+    static let pythonHome = DAWSON.root
         .appendingPathComponent("python-macos")
     static let pythonLibPath = pythonHome
         .appendingPathComponent("lib")

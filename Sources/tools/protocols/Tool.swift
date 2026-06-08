@@ -9,14 +9,24 @@ import Foundation
 
 protocol Tool {
     var name: String { get }
-    func schema() -> [String: Any]
+    func ollamaSchema() -> [String: Any]
+    func openAISchema() -> [String: Any]
+    func anthropicSchema() -> [String: Any]
     func execute(args: [String: Any]) async -> String
 }
 
 class ExampleTool: Tool {
     let name = "example_tool"
 
-    func schema() -> [String: Any] {
+    func openAISchema() -> [String : Any] {
+        return [:]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [:]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [
@@ -54,8 +64,42 @@ class ExamplePermissionAwareTool: PermissionAware {
             PermissionRequest(action: .read)    // Example permission check
         ]
     }
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Example tool description demonstrating the tools use, operations, and when it should be called.",
+            "parameters": [
+                "type": "object",
+                "required": [],
+                "properties": [
+                    "example_function_parameter": [
+                        "type": "string",
+                        "description": ""
+                    ]
+                ]
+            ]
+        ]
+    }
 
-    func schema() -> [String: Any] {
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Example tool description demonstrating the tools use, operations, and when it should be called.",
+            "input_schema": [
+                "type": "object",
+                "required": [],
+                "properties": [
+                    "example_function_parameter": [
+                        "type": "string",
+                        "description": ""
+                    ]
+                ]
+            ]
+        ]
+    }
+
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

@@ -10,7 +10,41 @@ import Foundation
 class MempalaceListRooms: Tool {
     let name = "mempalace_list_rooms"
     
-    func schema() -> [String: Any] {
+    func openAISchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "List rooms within a wing (or all rooms if no wing given)",
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "wing": [
+                        "type": "string",
+                        "description": "Wing to list rooms for (optional)"
+                    ]
+                ],
+                "required": []
+            ]
+        ]
+    }
+
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "List rooms within a wing (or all rooms if no wing given)",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "wing": [
+                        "type": "string",
+                        "description": "Wing to list rooms for (optional)"
+                    ]
+                ],
+                "required": []
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

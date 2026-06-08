@@ -7,8 +7,42 @@
 
 class RequestUserInput: Tool {
     let name = "request_user_input"
-
-    func schema() -> [String: Any] {
+    
+    func openAISchema() -> [String: Any] {
+        return [
+            "name": name,
+            "description": "Pauses main agent loop and requests input from the user. Used for additional information, answer to questions, or any other input from the user.",
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "prompt": [
+                        "type": "string",
+                        "description": "What to ask the user"
+                    ]
+                ],
+                "required": ["prompt"]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String: Any] {
+        return [
+            "name": name,
+            "description": "Pauses main agent loop and requests input from the user. Used for additional information, answer to questions, or any other input from the user.",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "prompt": [
+                        "type": "string",
+                        "description": "What to ask the user"
+                    ]
+                ],
+                "required": ["prompt"]
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [
