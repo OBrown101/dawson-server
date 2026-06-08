@@ -10,7 +10,51 @@ import Foundation
 class MempalaceCheckDuplicate: Tool {
     let name = "mempalace_check_duplicate"
     
-    func schema() -> [String: Any] {
+    func openAISchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Check if content already exists in the palace before filing",
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "content": [
+                        "type": "string",
+                        "description": "Content to check"
+                    ],
+                    "threshold": [
+                        "type": "number",
+                        "description": "Similarity threshold 0‑1 (default 0.9)",
+                        "default": 0.9
+                    ]
+                ],
+                "required": ["content"]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Check if content already exists in the palace before filing",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "content": [
+                        "type": "string",
+                        "description": "Content to check"
+                    ],
+                    "threshold": [
+                        "type": "number",
+                        "description": "Similarity threshold 0‑1 (default 0.9)",
+                        "default": 0.9
+                    ]
+                ],
+                "required": ["content"]
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

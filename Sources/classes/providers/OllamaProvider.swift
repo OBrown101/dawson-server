@@ -7,7 +7,7 @@
 
 import Foundation
 
-class OllamaProvider: LLMProvider {
+final class OllamaProvider: LLMProvider {
     func send(
         messages: [Message],
         model: String,
@@ -27,12 +27,12 @@ class OllamaProvider: LLMProvider {
         ]
         
         if (!tools.isEmpty) {
-            payload["tools"] = tools.map { $0.schema() }
+            payload["tools"] = tools.map { $0.ollamaSchema() }
             payload["tool_choice"] = "auto"
         }
         
         do {
-            let stream = LLMClient.shared.streamJSON(llmType: .ollama, payload: payload)
+            let stream = ProviderClient.shared.streamJSON(llmType: .ollama, payload: payload)
             
             for try await jsonData in stream {
                 guard let json = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else { return response }
@@ -78,5 +78,19 @@ class OllamaProvider: LLMProvider {
             errorResponse.error = error
         }
         return response
+    }
+    
+    func fetchModels() async throws -> [LLMModel] {
+        let json = try await ProviderClient.shared.fetchJSON(llmType: .ollama)
+
+        guard let models = json["models"] as? [[String: Any]] else {
+            return []
+        }
+
+        let llmModels = models.compactMap { model -> LLMModel? in
+            guard let name = model["name"] as? String else { return nil }
+            return LLMModel(id: name, name: name, provider: .ollama)
+        }
+        return llmModels
     }
 }

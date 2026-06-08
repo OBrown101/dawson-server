@@ -16,8 +16,72 @@ class ReadFile: PermissionAware {
             PermissionRequest(action: .read, target: path)
         ]
     }
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": """
+            Reads a file. Optionally reads only a specific line range and can prefix lines with line numbers. If file is long, DO NOT read the entire content, you should read only the specific line range of interest.
+            """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "path": [
+                        "type": "string",
+                        "description": "The file to read"
+                    ],
+                    "start": [
+                        "type": "integer",
+                        "description": "Starting line number (1‑based)"
+                    ],
+                    "end": [
+                        "type": "integer",
+                        "description": "Ending line number (1‑based, inclusive)"
+                    ],
+                    "show_line_numbers": [
+                        "type": "boolean",
+                        "description": "Whether to prefix each line with its line number",
+                        "default": false
+                    ]
+                ],
+                "required": ["path"]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": """
+            Reads a file. Optionally reads only a specific line range and can prefix lines with line numbers. If file is long, DO NOT read the entire content, you should read only the specific line range of interest.
+            """,
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "path": [
+                        "type": "string",
+                        "description": "The file to read"
+                    ],
+                    "start": [
+                        "type": "integer",
+                        "description": "Starting line number (1‑based)"
+                    ],
+                    "end": [
+                        "type": "integer",
+                        "description": "Ending line number (1‑based, inclusive)"
+                    ],
+                    "show_line_numbers": [
+                        "type": "boolean",
+                        "description": "Whether to prefix each line with its line number",
+                        "default": false
+                    ]
+                ],
+                "required": ["path"]
+            ]
+        ]
+    }
 
-    func schema() -> [String: Any] {
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

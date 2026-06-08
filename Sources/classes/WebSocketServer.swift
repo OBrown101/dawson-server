@@ -281,11 +281,24 @@ extension WebSocketServer {
     private func handleConfigData(_ configData: ConfigData, ws: WebSocket) async {
         switch (configData.dataType) {
         case .updateAgent:
-            guard let agentConfig: AgentConfigData = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
-            AgentHandler.shared.updateAgent(agentConfig: agentConfig)
+            guard let agent: Agent = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
+            AgentHandler.shared.updateAgent(agent: agent)
             
         case .deleteAgent:
             // Unsure yet if will allow client to remove agent(s), will need be safeguarded since can break subagents
+            break
+            
+        case .syncAgents:
+            let payload = AnyCodable(AgentHandler.shared.getAgents())
+            let configData = ConfigData(
+                userUUID: configData.userUUID,
+                dataType: configData.dataType,
+                payload: payload
+            )
+            let response = WSPacket(type: .configData, payload: AnyCodable(configData))
+            Task {
+                await self.send(response, ws: ws)
+            }
             
         case .upsertUser:
             guard let user: User = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
@@ -294,6 +307,36 @@ extension WebSocketServer {
         case .deleteUser:
             guard let userUUID: String = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
             UserHandler.shared.deleteUser(userUUID)
+            
+        case .syncUsers:
+            let payload = AnyCodable(UserHandler.shared.getUsers())
+            let configData = ConfigData(
+                userUUID: configData.userUUID,
+                dataType: configData.dataType,
+                payload: payload
+            )
+            let response = WSPacket(type: .configData, payload: AnyCodable(configData))
+            Task {
+                await self.send(response, ws: ws)
+            }
+            
+        case .updateProvider:
+            guard let providerAPIKeys: [ProviderClient.ProviderType: String] = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
+            providerAPIKeys.forEach {
+                ProviderClient.ProviderType.setAPIKey($0.key, key: $0.value)
+            }
+            
+        case .syncProviders:
+            let payload = await AnyCodable(Provider.getProviders())
+            let configData = ConfigData(
+                userUUID: configData.userUUID,
+                dataType: configData.dataType,
+                payload: payload
+            )
+            let response = WSPacket(type: .configData, payload: AnyCodable(configData))
+            Task {
+                await self.send(response, ws: ws)
+            }
         }
     }
 }
@@ -316,8 +359,8 @@ extension WebSocketServer {
     }
     
     private func guardPayload<T: Decodable>(_ payload: AnyCodable, dataType: String, ws: WebSocket) async -> T? {
-        guard let payloadData = try? JSONSerialization.data(withJSONObject: payload.value),
-              let object = try? JSONDecoder().decode(T.self, from: payloadData) else {
+        guard let data = try? JSONEncoder().encode(payload),
+              let object = try? JSONDecoder().decode(T.self, from: data) else {
             await send(WSPacket(type: .error, payload: "Invalid \(dataType) payload"), ws: ws)
             return nil
         }

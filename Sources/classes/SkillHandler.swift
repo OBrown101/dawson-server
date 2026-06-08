@@ -13,7 +13,7 @@ class SkillHandler: @unchecked Sendable {
     func loadSkills() -> [SkillMetadata] {
         let fileManager = FileManager.default
         
-        let skillsRoot = URL(fileURLWithPath: DAWSON.root)
+        let skillsRoot = DAWSON.root
             .appendingPathComponent("workspace")
             .appendingPathComponent("skills")
         

@@ -18,8 +18,62 @@ class ListFiles: PermissionAware {
             PermissionRequest(action: .read, target: path)
         ]
     }
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Recursively lists files and directories under the specified path. Returns relative paths for token efficiency.",
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "path": [
+                        "type": "string",
+                        "description": "The root directory to list"
+                    ],
+                    "include_hidden": [
+                        "type": "boolean",
+                        "description": "Whether to include hidden files and directories",
+                        "default": false
+                    ],
+                    "max_results": [
+                        "type": "integer",
+                        "description": "Maximum number of results to return",
+                        "default": 1000
+                    ]
+                ],
+                "required": ["path"]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Recursively lists files and directories under the specified path. Returns relative paths for token efficiency.",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "path": [
+                        "type": "string",
+                        "description": "The root directory to list"
+                    ],
+                    "include_hidden": [
+                        "type": "boolean",
+                        "description": "Whether to include hidden files and directories",
+                        "default": false
+                    ],
+                    "max_results": [
+                        "type": "integer",
+                        "description": "Maximum number of results to return",
+                        "default": 1000
+                    ]
+                ],
+                "required": ["path"]
+            ]
+        ]
+    }
 
-    func schema() -> [String: Any] {
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

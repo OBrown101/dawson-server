@@ -11,16 +11,20 @@ class Chat: Codable {
     let uuid: String
     let userUUID: String
     let agentUUID: String
+    var title: String
+    var subtitle: String
     var updatedTimestamp: Int64
     
     static let chatsDirectory = DAWSON.workspace.appendingPathComponent("chats")
     
     var messages: [MessageData] = []
     
-    init(uuid: String, userUUID: String, agentUUID: String) {
+    init(uuid: String, userUUID: String, agentUUID: String, title: String = "", subtitle: String = "") {
         self.uuid = uuid
         self.userUUID = userUUID
         self.agentUUID = agentUUID
+        self.title = title
+        self.subtitle = subtitle
         self.updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
     }
     
@@ -28,6 +32,8 @@ class Chat: Codable {
         case uuid
         case userUUID
         case agentUUID
+        case title
+        case subtitle
         case updatedTimestamp
     }
     
@@ -37,6 +43,8 @@ class Chat: Codable {
         uuid = try container.decode(String.self, forKey: .uuid)
         userUUID = try container.decode(String.self, forKey: .userUUID)
         agentUUID = try container.decode(String.self, forKey: .agentUUID)
+        title = try container.decode(String.self, forKey: .title)
+        subtitle = try container.decode(String.self, forKey: .subtitle)
         updatedTimestamp = try container.decode(Int64.self, forKey: .updatedTimestamp)
     }
 
@@ -46,6 +54,8 @@ class Chat: Codable {
         try container.encode(uuid, forKey: .uuid)
         try container.encode(userUUID, forKey: .userUUID)
         try container.encode(agentUUID, forKey: .agentUUID)
+        try container.encode(title, forKey: .title)
+        try container.encode(subtitle, forKey: .subtitle)
         try container.encode(updatedTimestamp, forKey: .updatedTimestamp)
     }
     

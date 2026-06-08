@@ -10,7 +10,55 @@ import Foundation
 class MempalaceTraverse: Tool {
     let name = "mempalace_traverse"
     
-    func schema() -> [String: Any] {
+    func openAISchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": """
+            Walk the palace graph from a room. Shows connected ideas across wings — the tunnels. Like following a thread through the palace: start at 'chromadb‑setup' in wing_code, discover it connects to wing_myproject (planning) and wing_user (feelings about it).
+            """,
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "start_room": [
+                        "type": "string",
+                        "description": "Room to start from (e.g. 'chromadb-setup', 'riley-school')"
+                    ],
+                    "max_hops": [
+                        "type": "integer",
+                        "description": "How many connections to follow (default: 2)",
+                        "default": 2
+                    ]
+                ],
+                "required": ["start_room"]
+            ]
+        ]
+    }
+
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": """
+            Walk the palace graph from a room. Shows connected ideas across wings — the tunnels. Like following a thread through the palace: start at 'chromadb‑setup' in wing_code, discover it connects to wing_myproject (planning) and wing_user (feelings about it).
+            """,
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "start_room": [
+                        "type": "string",
+                        "description": "Room to start from (e.g. 'chromadb-setup', 'riley-school')"
+                    ],
+                    "max_hops": [
+                        "type": "integer",
+                        "description": "How many connections to follow (default: 2)",
+                        "default": 2
+                    ]
+                ],
+                "required": ["start_room"]
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

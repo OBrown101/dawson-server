@@ -17,8 +17,42 @@ class Shell: PermissionAware {
             PermissionRequest(action: .command, target: command)
         ]
     }
-
-    func schema() -> [String: Any] {
+    
+    func openAISchema() -> [String: Any] {
+        return [
+            "name": name,
+            "description": "Executes a shell command on Linux, macOS, or Windows and returns stdout/stderr",
+            "parameters": [
+                "type": "object",
+                "required": ["command"],
+                "properties": [
+                    "command": [
+                        "type": "string",
+                        "description": "The shell command to execute"
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String: Any] {
+        return [
+            "name": name,
+            "description": "Executes a shell command on Linux, macOS, or Windows and returns stdout/stderr",
+            "input_schema": [
+                "type": "object",
+                "required": ["command"],
+                "properties": [
+                    "command": [
+                        "type": "string",
+                        "description": "The shell command to execute"
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

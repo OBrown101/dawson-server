@@ -10,7 +10,32 @@ import Foundation
 class MempalaceStatus: Tool {
     let name = "mempalace_status"
     
-    func schema() -> [String: Any] {
+    func openAISchema() -> [String : Any] {
+        return [
+            "type": "function",
+            "name": name,
+            "description": "Palace overview — total drawers, wing and room counts",
+            "parameters": [
+                "type": "object",
+                "properties": [:],
+                "required": []
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Palace overview — total drawers, wing and room counts",
+            "input_schema": [
+                "type": "object",
+                "properties": [:],
+                "required": []
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

@@ -15,8 +15,32 @@ class EnvAwareness: PermissionAware {
             PermissionRequest(action: .read)
         ]
     }
-
-    func schema() -> [String: Any] {
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "type": "function",
+            "name": name,
+            "description": "Provides agent with current environmental awareness data such as time/date, timezone, operating system, DAWSON project root and workspace directories, etc.",
+            "parameters": [
+                "type": "object",
+                "properties": [:],
+                "required": []
+            ]
+        ]
+    }
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Provides agent with current environmental awareness data such as time/date, timezone, operating system, DAWSON project root and workspace directories, etc.",
+            "input_schema": [
+                "type": "object",
+                "properties": [:],
+                "required": []
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

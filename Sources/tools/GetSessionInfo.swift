@@ -12,8 +12,36 @@ class GetSessionInfo: ChatAware {
     func setChat(_ chat: Chat?) {
         self.chat = chat
     }
-
-    func schema() -> [String: Any] {
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "type": "function",
+            "name": name,
+            "description": """
+            Gets details about the current chat-session with the user, including the user UUID, mode, and the permissions that are enabled for that mode.
+            """,
+            "parameters": [
+                "type": "object",
+                "properties": [:],
+                "required": []
+            ]
+        ]
+    }
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": """
+            Gets details about the current chat-session with the user, including the user UUID, mode, and the permissions that are enabled for that mode.
+            """,
+            "input_schema": [
+                "type": "object",
+                "properties": [:],
+                "required": []
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

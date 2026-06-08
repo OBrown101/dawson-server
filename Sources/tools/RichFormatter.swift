@@ -9,8 +9,51 @@ import Foundation
 
 class RichFormatter: Tool {
     let name = "rich_formatter"
-
-    func schema() -> [String: Any] {
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "type": "function",
+            "name": name,
+            "description": "Formats text using Markdown, adds code blocks or tables.",
+            "parameters": [
+                "type": "object",
+                "required": ["text", "format"],
+                "properties": [
+                    "text": [
+                        "type": "string",
+                        "description": "Text to format"
+                    ],
+                    "format": [
+                        "type": "string",
+                        "description": "Format type: markdown, code, table"
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Formats text using Markdown, adds code blocks or tables.",
+            "input_schema": [
+                "type": "object",
+                "required": ["text", "format"],
+                "properties": [
+                    "text": [
+                        "type": "string",
+                        "description": "Text to format"
+                    ],
+                    "format": [
+                        "type": "string",
+                        "description": "Format type: markdown, code, table"
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

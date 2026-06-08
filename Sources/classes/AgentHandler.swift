@@ -18,16 +18,15 @@ class AgentHandler: @unchecked Sendable {
     init() {
         let savedAgents = Agent.loadAllAgents()
         activeAgents = Dictionary(uniqueKeysWithValues: savedAgents.map { ($0.uuid, $0) })
-        print("Loaded Chats: \(savedAgents)")
+        print("Loaded Agents: \(savedAgents)")
     }
     
-    func updateAgent(agentConfig: AgentConfigData) {
-        let uuid = agentConfig.agentUUID
-        activeAgents[uuid]?.mode = agentConfig.mode
-        activeAgents[uuid]?.model = agentConfig.model
-        activeAgents[uuid]?.directories = agentConfig.directories
-        activeAgents[uuid]?.updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
-        activeAgents[uuid]?.saveMetadata()
+    func updateAgent(agent: Agent) {
+        activeAgents[agent.uuid]?.mode = agent.mode
+        activeAgents[agent.uuid]?.model = agent.model
+        activeAgents[agent.uuid]?.directories = agent.directories
+        activeAgents[agent.uuid]?.updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
+        activeAgents[agent.uuid]?.saveMetadata()
     }
     
     func deleteAgent(_ agentUUID: String) {
@@ -47,6 +46,10 @@ class AgentHandler: @unchecked Sendable {
     func setAgentMode(_ agentUUID: String, mode: ModeType) {
         activeAgents[agentUUID]?.mode = mode
         activeAgents[agentUUID]?.saveMetadata()
+    }
+    
+    func getAgents() -> [Agent] {
+        return activeAgents.values.map { $0 }
     }
     
     func getAgent(_ agentUUID: String) -> Agent? {

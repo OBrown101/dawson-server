@@ -16,8 +16,59 @@ class SpotifyTool: PermissionAware {
             PermissionRequest(action: .command)
         ]
     }
-
-    func schema() -> [String: Any] {
+    
+    func openAISchema() -> [String : Any] {
+        return [
+            "type": "function",
+            "name": name,
+            "description": "Interact with Spotify client or Web API: play, pause, search songs, create playlists, etc.",
+            "parameters": [
+                "type": "object",
+                "required": ["action"],
+                "properties": [
+                    "action": [
+                        "type": "string",
+                        "description": "Action to perform: play, pause, next, previous, search, create_playlist"
+                    ],
+                    "query": [
+                        "type": "string",
+                        "description": "Search query for songs/albums/playlists (required for search/create_playlist)"
+                    ],
+                    "playlist_name": [
+                        "type": "string",
+                        "description": "Name for new playlist (required for create_playlist)"
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Interact with Spotify client or Web API: play, pause, search songs, create playlists, etc.",
+            "input_schema": [
+                "type": "object",
+                "required": ["action"],
+                "properties": [
+                    "action": [
+                        "type": "string",
+                        "description": "Action to perform: play, pause, next, previous, search, create_playlist"
+                    ],
+                    "query": [
+                        "type": "string",
+                        "description": "Search query for songs/albums/playlists (required for search/create_playlist)"
+                    ],
+                    "playlist_name": [
+                        "type": "string",
+                        "description": "Name for new playlist (required for create_playlist)"
+                    ]
+                ]
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

@@ -11,7 +11,15 @@ struct ProviderResponse {
     var error: Error? = nil
 }
 
+struct LLMModel: Codable, Identifiable {
+    var id: String
+    var name: String
+    var provider: ProviderClient.ProviderType
+}
+
 protocol LLMProvider {
+    func fetchModels() async throws -> [LLMModel]
+    
     func send(
         messages: [Message],
         model: String,
@@ -21,11 +29,41 @@ protocol LLMProvider {
     ) async -> ProviderResponse
 }
 
-class Provider {
-    static func provider(for type: LLMClient.LLMType) -> LLMProvider {
+class Provider: Codable {
+    let type: ProviderClient.ProviderType
+    let apiKey: String
+    let models: [LLMModel]
+    let updatedTimestamp: Int64
+    
+    init(type: ProviderClient.ProviderType, apiKey: String, models: [LLMModel], updatedTimestamp: Int64 = Int64(Date.now.timeIntervalSince1970)) {
+        self.type = type
+        self.apiKey = apiKey
+        self.models = models
+        self.updatedTimestamp = updatedTimestamp
+    }
+    
+    static func getProviders() async -> [Provider] {
+        var providers: [Provider] = []
+        for type in ProviderClient.ProviderType.allCases {
+            let models = try? await fetchModels(for: type)
+            providers.append(Provider(type: type, apiKey: (type.apiKey ?? ""), models: (models ?? [])))
+        }
+        return providers
+    }
+    
+    static func provider(for type: ProviderClient.ProviderType) -> LLMProvider {
         switch type {
         case .ollama:
             return OllamaProvider()
+        case .openai:
+            return OpenAIProvider()
+        case .anthropic:
+            return AnthropicProvider()
         }
+    }
+    
+    static func fetchModels(for type: ProviderClient.ProviderType) async throws -> [LLMModel] {
+        let provider = Provider.provider(for: type)
+        return try await provider.fetchModels()
     }
 }

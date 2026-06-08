@@ -10,7 +10,65 @@ import Foundation
 class MempalaceSearch: Tool {
     let name = "mempalace_search"
     
-    func schema() -> [String: Any] {
+    func openAISchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Semantic search with wing/room filters",
+            "parameters": [
+                "type": "object",
+                "properties": [
+                    "query": [
+                        "type": "string",
+                        "description": "Text or context to search for"
+                    ],
+                    "wing": [
+                        "type": "string",
+                        "description": "Filter results to a specific wing (project or team) in the Memory Palace. Use the wing name as stored in the palace database."
+                    ],
+                    "room": [
+                        "type": "string",
+                        "description": "Filter results to a specific room within the chosen wing. Provide the exact room name as defined in the palace schema."
+                    ],
+                    "n_results": [
+                        "type": "integer",
+                        "description": "Maximum number of search results to return."
+                    ]
+                ],
+                "required": ["query"]
+            ]
+        ]
+    }
+
+    func anthropicSchema() -> [String : Any] {
+        return [
+            "name": name,
+            "description": "Semantic search with wing/room filters",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "query": [
+                        "type": "string",
+                        "description": "Text or context to search for"
+                    ],
+                    "wing": [
+                        "type": "string",
+                        "description": "Filter results to a specific wing (project or team) in the Memory Palace. Use the wing name as stored in the palace database."
+                    ],
+                    "room": [
+                        "type": "string",
+                        "description": "Filter results to a specific room within the chosen wing. Provide the exact room name as defined in the palace schema."
+                    ],
+                    "n_results": [
+                        "type": "integer",
+                        "description": "Maximum number of search results to return."
+                    ]
+                ],
+                "required": ["query"]
+            ]
+        ]
+    }
+    
+    func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [

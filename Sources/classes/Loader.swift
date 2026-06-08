@@ -47,7 +47,7 @@ class Loader: @unchecked Sendable {
     func loadAgentSoul(_ agent: Agent.AgentType) -> String {
         guard let soulPath = agent.soulPath else { return "" }
         
-        let url = URL(fileURLWithPath: DAWSON.root + soulPath)
+        let url = URL(fileURLWithPath: DAWSON.root.path + soulPath)
         if let content = try? String(contentsOf: url) {
             return content
         }
