@@ -223,7 +223,7 @@ extension WebSocketServer {
         switch (chatData.dataType) {
         case .upsert:
             guard let chat: Chat = await guardPayload(chatData.payload, dataType: chatData.dataType.rawValue, ws: ws) else { return }
-            dawson.upsertChat(chat)
+            await dawson.upsertChat(chat)
             
         case .delete:
             guard let chatUUID: String = await guardPayload(chatData.payload, dataType: chatData.dataType.rawValue, ws: ws) else { return }
@@ -321,13 +321,15 @@ extension WebSocketServer {
             }
             
         case .updateProvider:
-            guard let providerAPIKeys: [ProviderClient.ProviderType: String] = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
-            providerAPIKeys.forEach {
-                ProviderClient.ProviderType.setAPIKey($0.key, key: $0.value)
+            guard let providerAPIKeys: [String: String] = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
+            providerAPIKeys.forEach { providerName, apiKey in
+                guard let providerType = ProviderClient.ProviderType(rawValue: providerName) else { return }
+                ProviderClient.ProviderType.setAPIKey(providerType, key: apiKey)
             }
             
         case .syncProviders:
-            let payload = await AnyCodable(Provider.getProviders())
+            let providers = await Provider.getProviders()
+            let payload = AnyCodable(providers)
             let configData = ConfigData(
                 userUUID: configData.userUUID,
                 dataType: configData.dataType,

@@ -14,7 +14,7 @@ import System
 class MempalaceMemory: @unchecked Sendable {
     static let shared = MempalaceMemory()
     
-    let palacePath = "\(DAWSON.root)/.mempalace"
+    let palacePath = DAWSON.root.appendingPathComponent(".mempalace")
     
     /*
     private var inputPipe: Pipe?

@@ -10,20 +10,24 @@ import Foundation
 final class OllamaProvider: LLMProvider {
     func send(
         messages: [Message],
-        model: String,
+        model: LLMModel,
         tools: [Tool],
-        useThinking: Bool = true,
+        useThinking: Bool,
+        contextWindow: Int32,
         onUpdate: @escaping (ProviderResponse) -> Void
     ) async -> ProviderResponse {
-        var response = ProviderResponse(createdAt: "", model: "", content: "")
+        var response = ProviderResponse(createdAt: "", model: model.name, content: "")
         
         var payload: [String: Any] = [
-            "model": model,
+            "model": model.name,
             "messages": messages.map {[
                 "role": $0.role,
                 "content": $0.text
             ]},
-            "thinking": useThinking
+            "thinking": useThinking,
+            "options": [
+                "num_ctx": contextWindow
+            ]
         ]
         
         if (!tools.isEmpty) {

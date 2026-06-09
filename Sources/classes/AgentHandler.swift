@@ -10,8 +10,8 @@ import Foundation
 class AgentHandler: @unchecked Sendable {
     static let shared = AgentHandler()
     
-    static let defaultModel = "gpt-oss-20b-32k-16k"
-    let defaultMaxMessage = 200
+    static let defaultThoughtWindow = 200
+    static let defaultContextWindow: Int32 = 32_000
     
     private var activeAgents: [String: Agent] = [:]
 
@@ -56,14 +56,25 @@ class AgentHandler: @unchecked Sendable {
         return activeAgents[agentUUID]
     }
     
-    func spawnAgent(uuid: String, userUUID: String, type: Agent.AgentType, mode: ModeType = .egg, model: String = defaultModel) {
+    func spawnAgent(
+        uuid: String,
+        userUUID: String,
+        type: Agent.AgentType,
+        mode: ModeType = .egg,
+        model: LLMModel,
+        thoughtWindow: Int = defaultThoughtWindow,
+        contextWindow: Int32 = defaultContextWindow,
+        useThinking: Bool = true
+    ) {
         let newAgent = Agent(
             uuid: uuid,
             userUUID: userUUID,
             type: type,
             mode: mode,
             model: model,
-            maxMessages: defaultMaxMessage
+            thoughtWindow: thoughtWindow,
+            contextWindow: contextWindow,
+            useThinking: useThinking
         )
         if (!activeAgents.keys.contains(uuid)) {
             activeAgents[uuid] = newAgent

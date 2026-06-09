@@ -24,16 +24,21 @@ class ServerSettings: @unchecked Sendable {
     }
     
     private let UserDefault_ProviderAPIKeys = "UserDefault_ProviderAPIKeys"
-    var providerAPIKeys: [ProviderClient.ProviderType: String]? {
+    var providerAPIKeys: [ProviderClient.ProviderType: String] {
         get {
-            return UserDefaults.standard.dictionary(forKey: UserDefault_ProviderAPIKeys) as? [ProviderClient.ProviderType: String]
+            let saved = UserDefaults.standard.dictionary(forKey: UserDefault_ProviderAPIKeys) as? [String: String] ?? [:]
+
+            return Dictionary(uniqueKeysWithValues: saved.compactMap { key, value in
+                guard let type = ProviderClient.ProviderType(rawValue: key) else { return nil }
+                return (type, value)
+            })
         }
         set {
-            if let newValue = newValue {
-                UserDefaults.standard.set(newValue, forKey: UserDefault_ProviderAPIKeys)
-            } else {
-                UserDefaults.standard.removeObject(forKey: UserDefault_ProviderAPIKeys)
-            }
+            let raw = Dictionary(uniqueKeysWithValues: newValue.map {
+                ($0.key.rawValue, $0.value)
+            })
+
+            UserDefaults.standard.set(raw, forKey: UserDefault_ProviderAPIKeys)
         }
     }
 }

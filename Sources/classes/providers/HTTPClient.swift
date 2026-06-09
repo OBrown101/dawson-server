@@ -39,11 +39,11 @@ final class ProviderClient: Sendable {
         
         var apiKey: String? {
             let apiKeys = ServerSettings.shared.providerAPIKeys
-            return apiKeys?[self]
+            return apiKeys[self]
         }
         
         static func setAPIKey(_ type: ProviderType, key: String) {
-            ServerSettings.shared.providerAPIKeys?[type] = key
+            ServerSettings.shared.providerAPIKeys[type] = key
         }
     }
     
