@@ -28,7 +28,7 @@ final class PythonEnv: @unchecked Sendable {
         .appendingPathComponent("python3")
         .path
     #elseif os(Windows)
-    static let pythonHome = URL(fileURLWithPath: DAWSON.root).appendingPathComponent("python-windows")
+    static let pythonHome = DAWSON.root.appendingPathComponent("python-windows")
     static let pythonLibPath = pythonHome
         .appendingPathComponent("python\(pythonVersionBasic).dll")
         .path

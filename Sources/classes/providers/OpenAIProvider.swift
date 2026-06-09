@@ -10,15 +10,16 @@ import Foundation
 final class OpenAIProvider: LLMProvider {
     func send(
         messages: [Message],
-        model: String,
+        model: LLMModel,
         tools: [Tool],
-        useThinking: Bool = true,
+        useThinking: Bool,
+        contextWindow: Int32,
         onUpdate: @escaping (ProviderResponse) -> Void
     ) async -> ProviderResponse {
-        var response = ProviderResponse(createdAt: "", model: model, content: "")
+        var response = ProviderResponse(createdAt: "", model: model.name, content: "")
 
         var payload: [String: Any] = [
-            "model": model,
+            "model": model.name,
             "input": messages.map {
                 [
                     "role": $0.role,
@@ -27,6 +28,12 @@ final class OpenAIProvider: LLMProvider {
             },
             "stream": true
         ]
+        
+        if (useThinking) {
+            payload["reasoning"] = [
+                "effort": "medium"
+            ]
+        }
 
         if !tools.isEmpty {
             payload["tools"] = tools.map { $0.openAISchema() }
@@ -45,7 +52,7 @@ final class OpenAIProvider: LLMProvider {
                     continue
                 }
 
-                var chunkResponse = ProviderResponse(createdAt: "", model: model, content: "")
+                var chunkResponse = ProviderResponse(createdAt: "", model: model.name, content: "")
 
                 switch type {
                 case "response.output_text.delta":

@@ -29,7 +29,6 @@ struct Message: Codable {
     static func fromProvider(_ providerResponse: ProviderResponse, runUUID: String) -> Message {
         let createdAt = DateHandler.shared.iso8601Formatter.date(from: providerResponse.createdAt) ?? Date.now
         return Message(
-            
             runUUID: runUUID,
             createdAt: createdAt,
             model: providerResponse.model,

@@ -63,12 +63,12 @@ class DAWSON: @unchecked Sendable {
         await activeChats[chatUUID]?.getResumedResponse(response: response, onEvent: onEvent)
     }
     
-    func upsertChat(_ chat: Chat) {
+    func upsertChat(_ chat: Chat) async {
         if (!activeChats.keys.contains(chat.uuid)) {
             if (chat.uuid == DAWSON.primaryChatUUID) {
-                createPrimaryChat(userUUID: chat.userUUID)
+                await createPrimaryChat(userUUID: chat.userUUID)
             } else {
-                createSquireChat(chatUUID: chat.uuid, userUUID: chat.userUUID, agentUUID: chat.agentUUID)
+                await createSquireChat(chatUUID: chat.uuid, userUUID: chat.userUUID, agentUUID: chat.agentUUID)
             }
         } else {
             updateChat(chat)
@@ -78,13 +78,17 @@ class DAWSON: @unchecked Sendable {
 }
 
 extension DAWSON {
-    func createPrimaryChat(userUUID: String) {
+    func createPrimaryChat(userUUID: String) async {
         guard !activeChats.values.contains(where: { $0.userUUID == userUUID && $0.agentUUID == DAWSON.primaryAgentUUID }) else {
             print("Primary chat already exists for user (\(userUUID))")
             return
         }
         
-        AgentHandler.shared.spawnAgent(uuid: DAWSON.primaryAgentUUID, userUUID: userUUID, type: .dawson)
+        guard let model = await Provider.getProviders().flatMap({ $0.models }).first else {
+            print("No models available to create Primary Chat for user (\(userUUID))")
+            return
+        }
+        AgentHandler.shared.spawnAgent(uuid: DAWSON.primaryAgentUUID, userUUID: userUUID, type: .dawson, model: model)
         let newChat = Chat(uuid: DAWSON.primaryChatUUID, userUUID: userUUID, agentUUID: DAWSON.primaryAgentUUID)
         activeChats[DAWSON.primaryChatUUID] = newChat
         newChat.saveMetadata()
@@ -93,14 +97,19 @@ extension DAWSON {
         broadcastChat(newChat)
     }
     
-    func createSquireChat(chatUUID: String, userUUID: String, agentUUID: String? = nil) {
+    func createSquireChat(chatUUID: String, userUUID: String, agentUUID: String? = nil) async {
         let agentUUID = agentUUID ?? UUID().uuidString
         guard !activeChats.values.contains(where: { $0.userUUID == userUUID && $0.agentUUID == agentUUID }) else {
             print("Chat already exists for user (\(userUUID)) agent (\(agentUUID))")
             return
         }
         
-        AgentHandler.shared.spawnAgent(uuid: agentUUID, userUUID: userUUID, type: .squireBot)
+        guard let model = await Provider.getProviders().flatMap({ $0.models }).first else {
+            print("No models available to create Primary Chat for user (\(userUUID))")
+            return
+        }
+        
+        AgentHandler.shared.spawnAgent(uuid: agentUUID, userUUID: userUUID, type: .squireBot, model: model)
         let newChat = Chat(uuid: chatUUID, userUUID: userUUID, agentUUID: agentUUID)
         activeChats[chatUUID] = newChat
         newChat.saveMetadata()

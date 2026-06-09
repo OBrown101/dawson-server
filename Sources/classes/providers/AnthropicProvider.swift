@@ -10,15 +10,16 @@ import Foundation
 final class AnthropicProvider: LLMProvider {
     func send(
         messages: [Message],
-        model: String,
+        model: LLMModel,
         tools: [Tool],
-        useThinking: Bool = true,
+        useThinking: Bool,
+        contextWindow: Int32,
         onUpdate: @escaping (ProviderResponse) -> Void
     ) async -> ProviderResponse {
-        var response = ProviderResponse(createdAt: "", model: model, content: "")
+        var response = ProviderResponse(createdAt: "", model: model.name, content: "")
 
         var payload: [String: Any] = [
-            "model": model,
+            "model": model.name,
             "max_tokens": 4096,
             "messages": messages.map {
                 [
@@ -28,6 +29,13 @@ final class AnthropicProvider: LLMProvider {
             },
             "stream": true
         ]
+        
+        if (useThinking) {
+            payload["thinking"] = [
+                "type": "enabled",
+                "budget_tokens": 2048
+            ]
+        }
 
         if !tools.isEmpty {
             payload["tools"] = tools.map { $0.anthropicSchema() }
@@ -51,7 +59,7 @@ final class AnthropicProvider: LLMProvider {
                     continue
                 }
 
-                var chunkResponse = ProviderResponse(createdAt: "", model: model, content: "")
+                var chunkResponse = ProviderResponse(createdAt: "", model: model.name, content: "")
 
                 switch type {
                 case "message_start":

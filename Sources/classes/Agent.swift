@@ -35,25 +35,27 @@ actor AgentRunner {
 class Agent: Codable {
     let uuid: String
     let userUUID: String
-    let llmType: ProviderClient.ProviderType
     let type: AgentType
     var mode: ModeType
-    var model: String
-    var maxMessages: Int
+    var model: LLMModel
+    var state: AgentState
+    var thoughtWindow: Int
+    var contextWindow: Int32
+    var useThinking: Bool
+    var directories: [String]
     var updatedTimestamp: Int64
     
     private var tools: [Tool] = (Agent.requiredTools + Agent.optionalTools)
     private var history: [Message] = []
     var suspendData: SuspendData? = nil
-    var directories: [String] = [DAWSON.root.path]
     
     var provider: LLMProvider
     let runner: AgentRunner
 
-    static let agentsDirectory = (DAWSON.workspace).appendingPathComponent("agents")
+    static let agentsDirectory = DAWSON.workspace.appendingPathComponent("agents")
     
     static var optionalTools: [Tool] {
-        return [WriteFile(), SearchFile(), PatchFile(), ReplaceInFile(), ReadFile(), ListFiles(), Speak(), SelfConfig(), RichFormatter()]
+        return [WriteFile(), SearchFile(), PatchFile(), ReplaceInFile(), ReadFile(), ListFiles(), Speak(), RichFormatter()]
     }
     static var requiredTools: [Tool] {
         return [
@@ -69,35 +71,45 @@ class Agent: Codable {
     init(
         uuid: String,
         userUUID: String,
-        llmType: ProviderClient.ProviderType = .ollama,
+        providerType: ProviderClient.ProviderType = .ollama,
         type: AgentType,
         mode: ModeType,
-        model: String,
-        maxMessages: Int,
+        model: LLMModel,
+        state: AgentState = .ready,
+        thoughtWindow: Int,
+        contextWindow: Int32,
+        useThinking: Bool = true,
+        directories: [String] = [DAWSON.root.path],
         updatedTimestamp: Int64 = Int64(Date.now.timeIntervalSince1970)
     ) {
         self.uuid = uuid
         self.userUUID = userUUID
-        self.llmType = llmType
         self.type = type
         self.mode = mode
         self.model = model
-        self.maxMessages = maxMessages
+        self.state = state
+        self.thoughtWindow = thoughtWindow
+        self.contextWindow = contextWindow
+        self.useThinking = useThinking
+        self.directories = directories
         self.updatedTimestamp = updatedTimestamp
         
         tools.append(contentsOf: tools)
-        provider = Provider.provider(for: llmType)
+        provider = Provider.provider(for: model.provider)
         runner = AgentRunner()
     }
     
     enum CodingKeys: String, CodingKey {
         case uuid
         case userUUID
-        case llmType
         case type
         case mode
         case model
-        case maxMessages
+        case state
+        case thoughtWindow
+        case contextWindow
+        case useThinking
+        case directories
         case updatedTimestamp
         // TODO: Need to add tools later
     }
@@ -107,14 +119,17 @@ class Agent: Codable {
 
         uuid = try container.decode(String.self, forKey: .uuid)
         userUUID = try container.decode(String.self, forKey: .userUUID)
-        llmType = try container.decode(ProviderClient.ProviderType.self, forKey: .llmType)
         type = try container.decode(AgentType.self, forKey: .type)
         mode = try container.decode(ModeType.self, forKey: .mode)
-        model = try container.decode(String.self, forKey: .model)
-        maxMessages = try container.decode(Int.self, forKey: .maxMessages)
+        model = try container.decode(LLMModel.self, forKey: .model)
+        state = try container.decode(AgentState.self, forKey: .state)
+        thoughtWindow = try container.decode(Int.self, forKey: .thoughtWindow)
+        contextWindow = try container.decode(Int32.self, forKey: .contextWindow)
+        useThinking = try container.decode(Bool.self, forKey: .useThinking)
+        directories = try container.decode([String].self, forKey: .directories)
         updatedTimestamp = try container.decode(Int64.self, forKey: .updatedTimestamp)
         
-        provider = Provider.provider(for: llmType)
+        provider = Provider.provider(for: model.provider)
         runner = AgentRunner()
     }
 
@@ -123,11 +138,15 @@ class Agent: Codable {
 
         try container.encode(uuid, forKey: .uuid)
         try container.encode(userUUID, forKey: .userUUID)
-        try container.encode(llmType, forKey: .llmType)
         try container.encode(type, forKey: .type)
         try container.encode(mode, forKey: .mode)
         try container.encode(model, forKey: .model)
-        try container.encode(maxMessages, forKey: .maxMessages)
+        try container.encode(state, forKey: .state)
+        try container.encode(thoughtWindow, forKey: .thoughtWindow)
+        try container.encode(contextWindow, forKey: .contextWindow)
+        try container.encode(useThinking, forKey: .useThinking)
+        try container.encode(directories, forKey: .directories)
+        try container.encode(updatedTimestamp, forKey: .updatedTimestamp)
         // TODO: Need to add tools later
     }
     
@@ -158,7 +177,7 @@ class Agent: Codable {
         // TODO: Recent-window trimming is brute-force, will need to change handling
         let systemMessages = messages.filter { $0.role == MsgSource.system.name }
         let nonSystemMessages = messages.filter { $0.role != MsgSource.system.name }
-        let trimmed = nonSystemMessages.suffix(maxMessages)
+        let trimmed = nonSystemMessages.suffix(thoughtWindow)
         return (systemMessages + trimmed)
     }
     
@@ -223,7 +242,6 @@ class Agent: Codable {
         runUUID: String,
         userPrompt: String,
         systemPrompt: String = "",
-        useThinking: Bool = true,
         onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
     ) async throws -> [Message] {
         if await (runner.isRunning()) { throw AgentError.agentRunning }
@@ -243,7 +261,6 @@ class Agent: Codable {
         let loopMessages = await runInternalLoop(
             runUUID: runUUID,
             startMessages: newMessages,
-            useThinking: useThinking,
             onEvent: onEvent
         )
         await runner.setRunning(false)
@@ -306,7 +323,6 @@ class Agent: Codable {
         startMessages: [Message],
         existingToolCalls: [ToolCall]? = nil,
         existingToolCallIndex: Int = 0,
-        useThinking: Bool = true,
         onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
     ) async -> [Message] {
         var newMessages = startMessages
@@ -361,6 +377,7 @@ class Agent: Codable {
                 model: model,
                 tools: tools,
                 useThinking: useThinking,
+                contextWindow: contextWindow,
                 onUpdate: { response in
                     if !response.thinking.isEmpty {
                         onEvent?(.thinking(response.thinking), runUUID)
@@ -406,6 +423,11 @@ extension Agent {
         var toolCallIndex: Int = 0
     }
     
+    enum AgentState: String, Codable {
+        case ready = "READY"
+        case awaitingInput = "AWAITING_INPUT"
+    }
+    
     enum AgentType: String, Codable {
         case dawson = "DAWSON"
         case squireBot = "SQUIREBOT"
@@ -425,9 +447,9 @@ extension Agent {
         var soulPath: String? {
             switch (self) {
             case .dawson:
-                "/workspace/config/DAWSON_SOUL.md"
+                "config/DAWSON_SOUL.md"
             case .squireBot:
-                "/workspace/config/SQUIREBOT_SOUL.md"
+                "config/SQUIREBOT_SOUL.md"
             case .page:
                 nil
             }
