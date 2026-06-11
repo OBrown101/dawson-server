@@ -159,8 +159,8 @@ class Agent: Codable {
         iterationIndex: Int,
         messages: [Message],
         userInputRequest: UserInputRequest,
-        toolCallIndex: Int = 0,
-        toolCalls: [ToolCall]?
+        toolCalls: [ToolCall] = [],
+        toolCallIndex: Int = 0
     ) {
         suspendData = SuspendData(
             runUUID: runUUID,
@@ -170,7 +170,6 @@ class Agent: Codable {
             toolCalls: toolCalls,
             toolCallIndex: toolCallIndex
         )
-        // TODO: Need to send out Notification
     }
 
     private func trimMessages(_ messages: [Message]) -> [Message] {
@@ -252,6 +251,11 @@ class Agent: Codable {
         if (!systemPrompt.isEmpty) {
             newMessages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: systemPrompt))
         }
+        
+        if (history.isEmpty) {
+            // Agent just spawned
+            newMessages.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "___SESSION FIRST WAKE-UP___"))
+        }
 
         // SKIPPING FORCED CONTEXT GRAB FOR FURTHER TESTING
 //        let context = MempalaceMemory.shared.getPromptContext(query: userPrompt)
@@ -264,7 +268,7 @@ class Agent: Codable {
             onEvent: onEvent
         )
         await runner.setRunning(false)
-        try? appendMessages(loopMessages, agentUUID: uuid)
+        try? saveMessagesToHistory(loopMessages, agentUUID: uuid)
         return loopMessages
     }
     
@@ -276,44 +280,54 @@ class Agent: Codable {
         await runner.setRunning()
         
         guard let suspendData = suspendData else {
+            await runner.setRunning(false)
             throw AgentError.notSuspended
         }
+        
 
+        let runUUID = suspendData.runUUID
+        let request = suspendData.userInputRequest
         var messages = suspendData.messages
         let toolCalls = suspendData.toolCalls
-        var toolCallIndex = suspendData.toolCallIndex
+        var tcIndex = suspendData.toolCallIndex
         
-        if (userResponse.accepted == false) {
-            messages.append(Message(runUUID: suspendData.runUUID, role: MsgSource.tool.name, text: "User denied request."))
-        } else {
-            guard let toolCalls = suspendData.toolCalls else {
-                throw AgentError.suspendMissingToolCalls
-            }
-            if (toolCalls.indices.contains(suspendData.toolCallIndex)) {
-                // Need to execute original tool that requested user-input (to prevent re-triggering request)
-                let tc = toolCalls[suspendData.toolCallIndex]
-                if (tc.name != RequestUserInput().name) {
+        messages.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "___RESUMING PAUSED SESSION___"))
+        
+        switch request.type {
+        case .permission:
+            if let accepted = userResponse.accepted,
+               (accepted) {
+                if (toolCalls.indices.contains(tcIndex)) {
+                    // Need to execute original tool that requested permission (to prevent re-triggering request)
+                    let tc = toolCalls[tcIndex]
                     let toolOutput = await executeTool(tc)
-                    messages.append(Message(runUUID: suspendData.runUUID, role: MsgSource.tool.name, text: toolOutput))
-                } else {
-                    let toolOutput = "User responded to request: '\(userResponse)'."
-                    messages.append(Message(runUUID: suspendData.runUUID, role: MsgSource.tool.name, text: toolOutput))
+                    messages.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "User accepted tool-call permission request. Calling permitted tool (\(tc.name)"))
+                    messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: toolOutput))
                 }
-                
-                toolCallIndex = (suspendData.toolCallIndex + 1)
+            } else {
+                messages.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "User denied tool-call permission request."))
             }
+        case .confirmation:
+            break
+        case .input:
+            messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "User responded to request: '\(userResponse)'."))
         }
+        
+        // Tool permission/input handled and tool executed (or not)
+        tcIndex += 1
+        self.suspendData = nil
 
         let loopMessages = await runInternalLoop(
             runUUID: suspendData.runUUID,
             iterationIndex: suspendData.iterationIndex,
             startMessages: messages,
             existingToolCalls: toolCalls,
-            existingToolCallIndex: toolCallIndex,
+            existingToolCallIndex: tcIndex,
             onEvent: onEvent
         )
+            
         await runner.setRunning(false)
-        try? appendMessages(loopMessages, agentUUID: uuid)
+        try? saveMessagesToHistory(loopMessages, agentUUID: self.uuid)
         return loopMessages
     }
     
@@ -321,57 +335,54 @@ class Agent: Codable {
         runUUID: String,
         iterationIndex: Int = 0,
         startMessages: [Message],
-        existingToolCalls: [ToolCall]? = nil,
+        existingToolCalls: [ToolCall] = [],
         existingToolCallIndex: Int = 0,
         onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
     ) async -> [Message] {
         var newMessages = startMessages
         
-        let trimmedSessionHistory = trimMessages(history)
-        var iterations = iterationIndex
+        let trimmedHistory = trimMessages(history)
         let modeIterations = mode.iterationLimit ?? Int.max
         
+        // Begins with last session data (if resuming a supension)
+        var iterations = iterationIndex
         var pendingToolCalls = existingToolCalls
         var pendingToolIndex = existingToolCallIndex
         
         while iterations < modeIterations {
-            if let existingToolCalls = pendingToolCalls {
-                var toolResults: [Message] = []
-                for index in pendingToolIndex..<existingToolCalls.count {
-                    let tc = existingToolCalls[index]
+            var toolResults: [Message] = []
+            for index in pendingToolIndex..<pendingToolCalls.count {
+                let tc = pendingToolCalls[index]
 
-                    print("Calling tool: \(tc.name)...")
-                    onEvent?(.toolCall(tc.name), runUUID)
-                    let result = await runTool(tc)
+                print("Calling tool: \(tc.name)...")
+                onEvent?(.toolCall(tc.name), runUUID)
+                toolResults.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "CALLING TOOL: '\(tc.name)'"))
+                let result = await runTool(tc)
 
-                    switch result {
-                    case .completed(let output):
-                        onEvent?(.toolResult(output), runUUID)
-                        toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: output))
-                        print("Tool result: completed.")
+                switch result {
+                case .completed(let output):
+                    onEvent?(.toolResult(output), runUUID)
+                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: output))
+                    print("Tool result: completed.")
 
-                    case .denied(let reason):
-                        onEvent?(.toolResult(reason), runUUID)
-                        toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: reason))
-                        print("Tool result: denied -> \(reason)")
+                case .denied(let reason):
+                    onEvent?(.toolResult(reason), runUUID)
+                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: reason))
+                    print("Tool result: denied -> \(reason)")
 
-                    case .suspended(let request):
-                        onEvent?(.userInputRequest(request), runUUID)
-                        print("Tool result: requirest permission -> \(request.prompt)")
-                        toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "__PENDING_USER_INPUT__"))
-                        newMessages.append(contentsOf: toolResults)
-                        suspendSession(runUUID: runUUID, iterationIndex: iterations, messages: newMessages, userInputRequest: request, toolCallIndex: index, toolCalls: existingToolCalls)
-                        return newMessages
-                    }
+                case .suspended(let request):
+                    onEvent?(.userInputRequest(request), runUUID)
+                    print("Tool result: permission -> \(request.prompt)")
+                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "___SESSION PAUSED PENDING USER INPUT___"))
+                    newMessages.append(contentsOf: toolResults)
+                    suspendSession(runUUID: runUUID, iterationIndex: iterations, messages: newMessages, userInputRequest: request, toolCalls: pendingToolCalls, toolCallIndex: index)
+                    self.state = .awaitingInput
+                    return newMessages
                 }
-
-                newMessages.append(contentsOf: toolResults)
-                pendingToolCalls = nil
-                pendingToolIndex = 0
             }
+            newMessages.append(contentsOf: toolResults)
 
-            let promptMessage = (trimmedSessionHistory + newMessages)
-
+            let promptMessage = (trimmedHistory + newMessages)
             let response = await provider.send(
                 messages: promptMessage,
                 model: model,
@@ -405,7 +416,7 @@ class Agent: Codable {
         }
 
         if (iterations >= modeIterations) {
-            let iterationMaxMsg = Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "Reached main agent loop iteration limit, may not have completed tasks/tool-calls.")
+            let iterationMaxMsg = Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "___Reached main agent-loop iteration limit, may not have completed all tasks/tool-calls/prompts (run-session \(runUUID))___")
             newMessages.append(iterationMaxMsg)
         }
         return newMessages
@@ -418,8 +429,8 @@ extension Agent {
         let runUUID: String
         var iterationIndex: Int
         var messages: [Message]
-        var userInputRequest: UserInputRequest? = nil
-        var toolCalls: [ToolCall]? = nil
+        var userInputRequest: UserInputRequest
+        var toolCalls: [ToolCall] = []
         var toolCallIndex: Int = 0
     }
     
@@ -474,6 +485,7 @@ extension Agent {
         case notSuspended
         case noUserInputRequest
         case suspendMissingToolCalls
+        case invalidResponse
         
         var errorDescription: String? {
             switch self {
@@ -485,6 +497,8 @@ extension Agent {
                 return "Agent suspended but no UserInputRequest"
             case .suspendMissingToolCalls:
                 return "Agent suspended but missing tool calls"
+            case .invalidResponse:
+                return "Agent suspended but user response invalid"
             }
         }
     }
@@ -568,7 +582,7 @@ extension Agent {
         return Agent.agentsDirectory.appendingPathComponent("history_\(agentUUID).jsonl")
     }
     
-    private func appendMessages(_ messages: [Message], agentUUID: String) throws {
+    private func saveMessagesToHistory(_ messages: [Message], agentUUID: String) throws {
         let fileURL = Agent.historyURL(agentUUID: agentUUID)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -589,6 +603,6 @@ extension Agent {
     }
     
     private func appendMessage(_ message: Message, agentUUID: String) throws {
-        try appendMessages([message], agentUUID: agentUUID)
+        try saveMessagesToHistory([message], agentUUID: agentUUID)
     }
 }

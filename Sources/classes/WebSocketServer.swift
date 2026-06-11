@@ -285,7 +285,7 @@ extension WebSocketServer {
             AgentHandler.shared.updateAgent(agent: agent)
             
         case .deleteAgent:
-            // Unsure yet if will allow client to remove agent(s), will need be safeguarded since can break subagents
+            // Unsure yet if/how will allow client to remove agent(s), will need be safeguarded since can break subagents
             break
             
         case .syncAgents:
