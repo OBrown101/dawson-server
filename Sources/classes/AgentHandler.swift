@@ -24,16 +24,24 @@ class AgentHandler: @unchecked Sendable {
     func updateAgent(agent: Agent) {
         activeAgents[agent.uuid]?.mode = agent.mode
         activeAgents[agent.uuid]?.model = agent.model
+        activeAgents[agent.uuid]?.thoughtWindow = agent.thoughtWindow
+        activeAgents[agent.uuid]?.contextWindow = agent.contextWindow
+        activeAgents[agent.uuid]?.useThinking = agent.useThinking
         activeAgents[agent.uuid]?.directories = agent.directories
         activeAgents[agent.uuid]?.updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
         activeAgents[agent.uuid]?.saveMetadata()
+        
+        DAWSON.shared.broadcastAgentUpsert(agent)
     }
     
     func deleteAgent(_ agentUUID: String) {
+        let deletedAgent = activeAgents[agentUUID]
         activeAgents[agentUUID]?.deleteAll()
         activeAgents.removeValue(forKey: agentUUID)
         print("Agent (\(agentUUID) deleted.")
-        // TODO: Notification to sync user devices
+        if let agent = deletedAgent {
+            DAWSON.shared.broadcastAgentDelete(agent)
+        }
     }
     
     func deleteAgentsForUser(_ userUUID: String) {
@@ -41,11 +49,6 @@ class AgentHandler: @unchecked Sendable {
         agentUUIDs.forEach { uuid in
             deleteAgent(uuid)
         }
-    }
-    
-    func setAgentMode(_ agentUUID: String, mode: ModeType) {
-        activeAgents[agentUUID]?.mode = mode
-        activeAgents[agentUUID]?.saveMetadata()
     }
     
     func getAgents() -> [Agent] {

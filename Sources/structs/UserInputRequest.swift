@@ -10,16 +10,14 @@ import Foundation
 struct UserInputRequest: Codable {
     let agentUUID: String
     let userUUID: String
-    let type: UserRequestType
+    let type: ReqType
     let prompt: String          // Can be reason for request or LLM's prompt to the user
     let toolCallName: String?
     let metadata: [String: String]
     
-    enum UserRequestType: String, Codable {
+    enum ReqType: String, Codable {
         case permission = "PERMISSION"
-        case clarification = "CLARIFICATION"
         case confirmation = "CONFIRMATION"
-        case selection = "SELECTION"
         case input = "INPUT"
     }
 }

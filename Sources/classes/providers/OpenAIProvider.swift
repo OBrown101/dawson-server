@@ -19,7 +19,7 @@ final class OpenAIProvider: LLMProvider {
         var response = ProviderResponse(createdAt: "", model: model.name, content: "")
 
         var payload: [String: Any] = [
-            "model": model.name,
+            "model": model.id,
             "input": messages.map {
                 [
                     "role": $0.role,
@@ -64,9 +64,22 @@ final class OpenAIProvider: LLMProvider {
 
                 case "response.output_item.done":
                     if let item = json["item"] as? [String: Any],
-                       let itemType = item["type"] as? String,
-                       itemType == "function_call" {
-                        response.toolCalls.append(item)
+                       let itemType = item["type"] as? String {
+
+                        if itemType == "function_call" {
+                            response.toolCalls.append(item)
+                        }
+
+                        if itemType == "message",
+                           let content = item["content"] as? [[String: Any]] {
+                            for part in content {
+                                if let text = part["text"] as? String {
+                                    chunkResponse.content = text
+                                    response.content += text
+                                    onUpdate(chunkResponse)
+                                }
+                            }
+                        }
                     }
 
                 case "response.completed":

@@ -94,7 +94,7 @@ extension DAWSON {
         newChat.saveMetadata()
         print("Primary chat created for user (\(userUUID))")
         
-        broadcastChat(newChat)
+        broadcastChatUpsert(newChat)
     }
     
     func createSquireChat(chatUUID: String, userUUID: String, agentUUID: String? = nil) async {
@@ -115,26 +115,28 @@ extension DAWSON {
         newChat.saveMetadata()
         print("New chat (\(chatUUID)) created for user (\(userUUID)) with agent (\(agentUUID)")
         
-        broadcastChat(newChat)
+        broadcastChatUpsert(newChat)
     }
     
     func updateChat(_ chat: Chat) {
-        // Currently no other chat info, this is where settings, etc. would be updated
         activeChats[chat.uuid]?.title = chat.title
         activeChats[chat.uuid]?.subtitle = chat.subtitle
         activeChats[chat.uuid]?.updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
         print("Chat (\(chat.uuid) updated.")
-        // broadcastChat(chat)
+        broadcastChatUpsert(chat)
     }
     
     func deleteChat(_ chatUUID: String) {
+        let deletedChat = activeChats[chatUUID]
         activeChats[chatUUID]?.deleteAll()
         if let agentUUID = activeChats[chatUUID]?.agentUUID {
             AgentHandler.shared.deleteAgent(agentUUID)
         }
         activeChats.removeValue(forKey: chatUUID)
         print("Chat (\(chatUUID) deleted.")
-        // TODO: Notification to sync user devices
+        if let chat = deletedChat {
+            broadcastChatDelete(chat)
+        }
     }
     
     func deleteChatsForUser(_ userUUID: String) {
@@ -146,7 +148,7 @@ extension DAWSON {
 }
 
 extension DAWSON {
-    func broadcastChat(_ chat: Chat) {
+    func broadcastChatUpsert(_ chat: Chat) {
         guard let encoded = try? JSONEncoder().encode(chat),
               let payload = try? JSONDecoder().decode(AnyCodable.self, from: encoded) else { return }
         let chatData = ChatData(
@@ -157,6 +159,44 @@ extension DAWSON {
             payload: payload
         )
         let response = WSPacket(type: .chatData, payload: AnyCodable(chatData))
+        server.broadcast(response)
+    }
+    
+    func broadcastChatDelete(_ chat: Chat) {
+        guard let encoded = try? JSONEncoder().encode(chat.uuid),
+              let payload = try? JSONDecoder().decode(AnyCodable.self, from: encoded) else { return }
+        let chatData = ChatData(
+            chatUUID: chat.uuid,
+            userUUID: chat.userUUID,
+            agentUUID: chat.agentUUID,
+            dataType: .delete,
+            payload: payload
+        )
+        let response = WSPacket(type: .chatData, payload: AnyCodable(chatData))
+        server.broadcast(response)
+    }
+    
+    func broadcastAgentUpsert(_ agent: Agent) {
+        guard let encoded = try? JSONEncoder().encode(agent),
+              let payload = try? JSONDecoder().decode(AnyCodable.self, from: encoded) else { return }
+        let configData = ConfigData(
+            userUUID: agent.userUUID,
+            dataType: .updateAgent,
+            payload: payload
+        )
+        let response = WSPacket(type: .configData, payload: AnyCodable(configData))
+        server.broadcast(response)
+    }
+    
+    func broadcastAgentDelete(_ agent: Agent) {
+        guard let encoded = try? JSONEncoder().encode(agent.uuid),
+              let payload = try? JSONDecoder().decode(AnyCodable.self, from: encoded) else { return }
+        let configData = ConfigData(
+            userUUID: agent.userUUID,
+            dataType: .deleteAgent,
+            payload: payload
+        )
+        let response = WSPacket(type: .configData, payload: AnyCodable(configData))
         server.broadcast(response)
     }
 }
