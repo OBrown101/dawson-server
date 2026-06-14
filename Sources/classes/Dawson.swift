@@ -120,7 +120,6 @@ extension DAWSON {
     
     func updateChat(_ chat: Chat) {
         activeChats[chat.uuid]?.title = chat.title
-        activeChats[chat.uuid]?.subtitle = chat.subtitle
         activeChats[chat.uuid]?.updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
         print("Chat (\(chat.uuid) updated.")
         broadcastChatUpsert(chat)

@@ -90,6 +90,7 @@ class MempalaceDiaryWrite: Tool {
     }
     
     func execute(args: [String: Any]) -> String {
+        print("DIARY WRITE (\(args["agent_name"] ?? "")): ", args["entry"] ?? "")
         return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
     }
 }

@@ -15,7 +15,7 @@ class Loader: @unchecked Sendable {
         let memorySchema = loadMemory()
         let skillSummaries = loadSkillSummaries()
         let basicInfo = loadBasicInfo()
-        return [soul, basicInfo, memorySchema, skillSummaries].joined(separator: "/n")
+        return [soul, basicInfo, memorySchema, skillSummaries].joined(separator: "\n")
     }
     
     func loadBasicInfo() -> String {
@@ -39,7 +39,6 @@ class Loader: @unchecked Sendable {
         return """
         ## YOUR MEMORY SETUP ##
         \(MempalaceMemory.shared.getStatus())
-        Your agent loop already calls mempalace_search on every user prompt (by default) and the result is fed into your conversation context.
         ## --- ##
         """
     }

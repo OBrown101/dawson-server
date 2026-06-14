@@ -47,6 +47,7 @@ class Agent: Codable {
     
     private var tools: [Tool] = (Agent.requiredTools + Agent.optionalTools)
     private var history: [Message] = []
+    private var summary: String = ""
     var suspendData: SuspendData? = nil
     
     var provider: LLMProvider
@@ -58,8 +59,10 @@ class Agent: Codable {
         return [WriteFile(), SearchFile(), PatchFile(), ReplaceInFile(), ReadFile(), ListFiles(), Speak(), RichFormatter()]
     }
     static var requiredTools: [Tool] {
-        return [
-            RequestUserInput(), EnvAwareness(), GetFullSkill(), GetSessionInfo(),
+        [RequestUserInput(), EnvAwareness(), GetFullSkill(), GetSessionInfo()] + Agent.memoryTools
+    }
+    static var memoryTools: [Tool] {
+        [
             MempalaceAddDrawer(), MempalaceCheckDuplicate(), MempalaceDeleteDrawer(), MempalaceDiaryRead(),
             MempalaceDiaryWrite(), MempalaceGetAAAKSpec(), MempalaceGraphStats(),
             MempalaceKgInvalidate(), MempalaceKgQuery(), MempalaceKgStats(), MempalaceKgTimeline(),
@@ -94,7 +97,6 @@ class Agent: Codable {
         self.directories = directories
         self.updatedTimestamp = updatedTimestamp
         
-        tools.append(contentsOf: tools)
         provider = Provider.provider(for: model.provider)
         runner = AgentRunner()
     }
@@ -152,6 +154,10 @@ class Agent: Codable {
     
     func getHistory() -> [Message] {
         return history
+    }
+    
+    func getSummary() -> String {
+        return summary
     }
     
     private func suspendSession(
@@ -246,20 +252,16 @@ class Agent: Codable {
         if await (runner.isRunning()) { throw AgentError.agentRunning }
         await runner.setRunning()
         
+        // In case previously stuck in .awaitingInput, if calling runAgent() then suspend-state no longer valid
+        self.suspendData = nil
+        self.state = .ready
+        
         var newMessages: [Message] = []
 
         if (!systemPrompt.isEmpty) {
             newMessages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: systemPrompt))
         }
-        
-        if (history.isEmpty) {
-            // Agent just spawned
-            newMessages.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "___SESSION FIRST WAKE-UP___"))
-        }
 
-        // SKIPPING FORCED CONTEXT GRAB FOR FURTHER TESTING
-//        let context = MempalaceMemory.shared.getPromptContext(query: userPrompt)
-//        newMessages.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: context))
         newMessages.append(Message(runUUID: runUUID, role: MsgSource.user.name, text: userPrompt))
 
         let loopMessages = await runInternalLoop(
@@ -267,8 +269,19 @@ class Agent: Codable {
             startMessages: newMessages,
             onEvent: onEvent
         )
+        
+        if (self.state != .awaitingInput) {
+            await runMemorySessionSummarizer(
+                runUUID: runUUID,
+                messages: loopMessages,
+                onEvent: onEvent
+            )
+        }
+        
+        await setSummary()
+        saveMessagesToHistory(loopMessages, agentUUID: uuid)
+        saveMetadata()
         await runner.setRunning(false)
-        try? saveMessagesToHistory(loopMessages, agentUUID: uuid)
         return loopMessages
     }
     
@@ -291,8 +304,6 @@ class Agent: Codable {
         let toolCalls = suspendData.toolCalls
         var tcIndex = suspendData.toolCallIndex
         
-        messages.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "___RESUMING PAUSED SESSION___"))
-        
         switch request.type {
         case .permission:
             if let accepted = userResponse.accepted,
@@ -301,21 +312,23 @@ class Agent: Codable {
                     // Need to execute original tool that requested permission (to prevent re-triggering request)
                     let tc = toolCalls[tcIndex]
                     let toolOutput = await executeTool(tc)
-                    messages.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "User accepted tool-call permission request. Calling permitted tool (\(tc.name)"))
+                    messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
                     messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: toolOutput))
                 }
             } else {
-                messages.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "User denied tool-call permission request."))
+                messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
             }
         case .confirmation:
-            break
+            // Currently just inputs back into LLM, in future can be used for specific, binary requirements (not just approve/deny)
+            messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
         case .input:
-            messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "User responded to request: '\(userResponse)'."))
+            messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
         }
         
         // Tool permission/input handled and tool executed (or not)
         tcIndex += 1
         self.suspendData = nil
+        self.state = .ready
 
         let loopMessages = await runInternalLoop(
             runUUID: suspendData.runUUID,
@@ -325,13 +338,22 @@ class Agent: Codable {
             existingToolCallIndex: tcIndex,
             onEvent: onEvent
         )
+        
+        if (self.state != .awaitingInput) {
+            await runMemorySessionSummarizer(
+                runUUID: runUUID,
+                messages: loopMessages,
+                onEvent: onEvent
+            )
+        }
             
+        saveMessagesToHistory(loopMessages, agentUUID: self.uuid)
+        saveMetadata()
         await runner.setRunning(false)
-        try? saveMessagesToHistory(loopMessages, agentUUID: self.uuid)
         return loopMessages
     }
     
-    func runInternalLoop(
+    private func runInternalLoop(
         runUUID: String,
         iterationIndex: Int = 0,
         startMessages: [Message],
@@ -356,7 +378,7 @@ class Agent: Codable {
 
                 print("Calling tool: \(tc.name)...")
                 onEvent?(.toolCall(tc.name), runUUID)
-                toolResults.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "CALLING TOOL: '\(tc.name)'"))
+                toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "CALLING TOOL: '\(tc.name)'"))
                 let result = await runTool(tc)
 
                 switch result {
@@ -372,8 +394,11 @@ class Agent: Codable {
 
                 case .suspended(let request):
                     onEvent?(.userInputRequest(request), runUUID)
+                    if (!request.prompt.isEmpty) {
+                        onEvent?(.content(request.prompt), runUUID)
+                        toolResults.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: request.prompt))
+                    }
                     print("Tool result: permission -> \(request.prompt)")
-                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "___SESSION PAUSED PENDING USER INPUT___"))
                     newMessages.append(contentsOf: toolResults)
                     suspendSession(runUUID: runUUID, iterationIndex: iterations, messages: newMessages, userInputRequest: request, toolCalls: pendingToolCalls, toolCallIndex: index)
                     self.state = .awaitingInput
@@ -405,8 +430,6 @@ class Agent: Codable {
             guard let toolCalls = responseMsg.toolCalls,
                   (!toolCalls.isEmpty) else {
                 history.append(contentsOf: newMessages)
-                // SKIPPING FORCED HISTORY SAVE FOR FURTHER TESTING
-//                MempalaceMemory.shared.addConvHistory(messages: newMessages, agent: type)
                 return newMessages
             }
 
@@ -414,14 +437,63 @@ class Agent: Codable {
             pendingToolIndex = 0
             iterations += 1
         }
-
-        if (iterations >= modeIterations) {
-            let iterationMaxMsg = Message(runUUID: runUUID, role: MsgSource.assistant.name, text: "___Reached main agent-loop iteration limit, may not have completed all tasks/tool-calls/prompts (run-session \(runUUID))___")
-            newMessages.append(iterationMaxMsg)
-        }
         return newMessages
     }
     
+    private func runMemorySessionSummarizer(
+        runUUID: String,
+        messages: [Message],
+        onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
+    ) async {
+        var summarizerMessages = messages
+        summarizerMessages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: AgentUtilities.memorySessionPrompt))
+
+        let response = await provider.send(
+            messages: summarizerMessages,
+            model: model,       // Eventually change this to be subagent model (faster)
+            tools: Agent.memoryTools,
+            useThinking: useThinking,
+            contextWindow: contextWindow,
+            onUpdate: { _ in }
+        )
+        let responseMsg = Message.fromProvider(response, runUUID: runUUID)
+        summarizerMessages.append(responseMsg)
+
+        guard let toolCalls = responseMsg.toolCalls else {
+            return
+        }
+
+        for tc in toolCalls {
+            onEvent?(.toolCall(tc.name), runUUID)
+
+            guard let tool = Agent.memoryTools.first(where: { $0.name == tc.name }) else { continue }
+
+            let output = await tool.execute(args: tc.argDict)
+            onEvent?(.toolResult(output), runUUID)
+
+            summarizerMessages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: output))
+        }
+    }
+    
+    private func setSummary() async {
+        let runUUID = UUID().uuidString
+        let recentMsgCnt = 50
+        var messages: [Message] = history
+            .filter { $0.role == MsgSource.user.name || $0.role == MsgSource.assistant.name }
+            .suffix(recentMsgCnt)
+        messages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: AgentUtilities.convSummaryPrompt))
+        
+        let response = await provider.send(
+            messages: messages,
+            model: model,       // Eventually change this to be subagent model (faster)
+            tools: [],
+            useThinking: useThinking,
+            contextWindow: contextWindow,
+            onUpdate: { _ in }
+        )
+        let responseMsg = Message.fromProvider(response, runUUID: runUUID)
+        self.summary = responseMsg.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
 }
 
 extension Agent {
@@ -582,27 +654,31 @@ extension Agent {
         return Agent.agentsDirectory.appendingPathComponent("history_\(agentUUID).jsonl")
     }
     
-    private func saveMessagesToHistory(_ messages: [Message], agentUUID: String) throws {
-        let fileURL = Agent.historyURL(agentUUID: agentUUID)
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        
-        if !FileManager.default.fileExists(atPath: fileURL.path) {
-            FileManager.default.createFile(atPath: fileURL.path, contents: nil)
-        }
-        
-        let handle = try FileHandle(forWritingTo: fileURL)
-        defer { try? handle.close() }
-        try handle.seekToEnd()
-        
-        for message in messages {
-            let jsonData = try encoder.encode(message)
-            handle.write(jsonData)
-            handle.write(Data("\n".utf8))
+    private func saveMessagesToHistory(_ messages: [Message], agentUUID: String) {
+        do {
+            let fileURL = Agent.historyURL(agentUUID: agentUUID)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            
+            if !FileManager.default.fileExists(atPath: fileURL.path) {
+                FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+            }
+            
+            let handle = try FileHandle(forWritingTo: fileURL)
+            defer { try? handle.close() }
+            try handle.seekToEnd()
+            
+            for message in messages {
+                let jsonData = try encoder.encode(message)
+                handle.write(jsonData)
+                handle.write(Data("\n".utf8))
+            }
+        } catch {
+            print("Failed to save Agent \(uuid) messages to history: ", error)
         }
     }
     
-    private func appendMessage(_ message: Message, agentUUID: String) throws {
-        try saveMessagesToHistory([message], agentUUID: agentUUID)
+    private func appendMessage(_ message: Message, agentUUID: String) {
+        saveMessagesToHistory([message], agentUUID: agentUUID)
     }
 }
