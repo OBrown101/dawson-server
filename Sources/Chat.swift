@@ -11,8 +11,8 @@ class Chat: Codable {
     let uuid: String
     let userUUID: String
     let agentUUID: String
-    var title: String
-    var subtitle: String
+    var title: String       // Set by user as overall chat topic
+    var subtitle: String    // Set by agent as current discussion topic
     var updatedTimestamp: Int64
     
     static let chatsDirectory = DAWSON.workspace.appendingPathComponent("chats")
@@ -62,6 +62,7 @@ class Chat: Codable {
     func getResponse(runUUID: String, prompt: String, onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil) async {
         let newMessages = await AgentHandler.shared.runAgent(runUUID: runUUID, userUUID: userUUID, agentUUID: agentUUID, prompt: prompt, onEvent: onEvent)
         let messageDatas = newMessages.compactMap({ MessageData.fromMessage($0, chatUUID: uuid, userUUID: userUUID, agentUUID: agentUUID) })
+        updateTitles()
         addNewMessageDatas(messageDatas)
     }
     
@@ -69,6 +70,13 @@ class Chat: Codable {
         let newMessages = await AgentHandler.shared.resumeAgent(response: response, onEvent: onEvent)
         let messageDatas = newMessages.compactMap({ MessageData.fromMessage($0, chatUUID: uuid, userUUID: userUUID, agentUUID: agentUUID) })
         addNewMessageDatas(messageDatas)
+    }
+    
+    private func updateTitles() {
+        let summary = AgentHandler.shared.getAgent(agentUUID)?.getSummary() ?? ""
+        title = (title.isEmpty) ? summary : title
+        subtitle = summary
+        updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
     }
 }
 
