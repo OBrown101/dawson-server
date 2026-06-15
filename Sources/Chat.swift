@@ -77,6 +77,7 @@ class Chat: Codable {
         title = (title.isEmpty) ? summary : title
         subtitle = summary
         updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
+        saveMetadata()
     }
 }
 

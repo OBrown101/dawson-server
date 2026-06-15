@@ -33,17 +33,21 @@ final class WebSocketServer: @unchecked Sendable {
     private var connections: [UUID: WebSocket] = [:]
 
     func handle(_ ws: WebSocket) {
-        let id = UUID()
-        connections[id] = ws
-
-        ws.onText { [weak self] ws, text in
-            Task {
-                await self?.onReceive(json: text, ws: ws)
+        ws.eventLoop.execute { [weak self] in
+            guard let self else { return }
+            
+            let id = UUID()
+            connections[id] = ws
+            
+            ws.onText { [weak self] ws, text in
+                Task {
+                    await self?.onReceive(json: text, ws: ws)
+                }
             }
-        }
-
-        ws.onClose.whenComplete { [weak self] _ in
-            self?.connections.removeValue(forKey: id)
+            
+            ws.onClose.whenComplete { [weak self] _ in
+                self?.connections.removeValue(forKey: id)
+            }
         }
     }
 
