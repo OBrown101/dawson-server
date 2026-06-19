@@ -15,7 +15,9 @@ class Chat: Codable {
     var subtitle: String    // Set by agent as current discussion topic
     var updatedTimestamp: Int64
     
-    static let chatsDirectory = DAWSON.workspace.appendingPathComponent("chats")
+    static let chatsDirectory = DAWSON.databank.appendingPathComponent("chats")
+    static let chatsMetadataDirectory = chatsDirectory.appendingPathComponent("metadata")
+    static let chatsMessagesDirectory = chatsDirectory.appendingPathComponent("messages")
     
     var messages: [MessageData] = []
     
@@ -87,32 +89,32 @@ extension Chat {
         var timestamps = Set<Int64>()
         messages.removeAll { !timestamps.insert($0.timestamp).inserted }
         messages.forEach {
-            try? appendMessageData($0, chatUUID: uuid)
+            appendMessageData($0, chatUUID: uuid)
         }
     }
 }
 
 extension Chat {
     static func loadAllChats() -> [Chat] {
-        guard let files = try? FileManager.default.contentsOfDirectory(at: chatsDirectory, includingPropertiesForKeys: nil) else { return [] }
+        guard let files = try? FileManager.default.contentsOfDirectory(at: chatsMetadataDirectory, includingPropertiesForKeys: nil) else { return [] }
 
         var chats: [Chat] = []
         for fileURL in files {
-            guard (fileURL.pathExtension == "json"),
+            guard fileURL.pathExtension == "json",
                   let data = try? Data(contentsOf: fileURL),
                   let chat = try? JSONDecoder().decode(Chat.self, from: data) else { continue }
-            
+
             chat.messages = loadMessages(chatUUID: chat.uuid)
             chats.append(chat)
         }
-        
+
         return chats.sorted { $0.messages.last?.timestamp ?? 0 > $1.messages.last?.timestamp ?? 0 }
     }
     
     static func loadChat(chatUUID: String) -> Chat? {
         let url = metadataURL(chatUUID: chatUUID)
         guard let data = try? Data(contentsOf: url),
-              let chat = try? JSONDecoder().decode(Chat.self,from: data)  else { return nil }
+              let chat = try? JSONDecoder().decode(Chat.self,from: data) else { return nil }
         
         chat.messages = loadMessages(chatUUID: chatUUID)
         return chat
@@ -135,8 +137,8 @@ extension Chat {
     
     func saveMetadata() {
         do {
-            try FileManager.default.createDirectory(at: Chat.chatsDirectory, withIntermediateDirectories: true)
-            
+            try FileManager.default.createDirectory(at: Chat.chatsMetadataDirectory, withIntermediateDirectories: true)
+
             let data = try JSONEncoder().encode(self)
             try data.write(to: Chat.metadataURL(chatUUID: uuid), options: .atomic)
             print("Successfully saved Chat \(uuid) metadata")
@@ -163,35 +165,41 @@ extension Chat {
     }
     
     private static func metadataURL(chatUUID: String) -> URL {
-        return Chat.chatsDirectory.appendingPathComponent("metadata_\(chatUUID).json")
+        return Chat.chatsMetadataDirectory.appendingPathComponent("\(chatUUID).json")
     }
 
     private static func messagesURL(chatUUID: String) -> URL {
-        return Chat.chatsDirectory.appendingPathComponent("messages_\(chatUUID).jsonl")
+        return Chat.chatsMessagesDirectory.appendingPathComponent("\(chatUUID).jsonl")
     }
     
-    private func appendMessageData(_ message: MessageData, chatUUID: String) throws {
-        try appendMessageDatas([message], chatUUID: chatUUID)
+    private func appendMessageData(_ message: MessageData, chatUUID: String) {
+        appendMessageDatas([message], chatUUID: chatUUID)
     }
     
-    private func appendMessageDatas(_ messageDatas: [MessageData], chatUUID: String) throws {
-        let fileURL = Chat.messagesURL(chatUUID: chatUUID)
-
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-
-        if !FileManager.default.fileExists(atPath: fileURL.path) {
-            FileManager.default.createFile(atPath: fileURL.path, contents: nil)
-        }
-
-        let handle = try FileHandle(forWritingTo: fileURL)
-        defer { try? handle.close() }
-        try handle.seekToEnd()
-
-        for messageData in messageDatas {
-            let jsonData = try encoder.encode(messageData)
-            handle.write(jsonData)
-            handle.write(Data("\n".utf8))
+    private func appendMessageDatas(_ messageDatas: [MessageData], chatUUID: String) {
+        do {
+            try FileManager.default.createDirectory(at: Chat.chatsMessagesDirectory, withIntermediateDirectories: true)
+            
+            let fileURL = Chat.messagesURL(chatUUID: chatUUID)
+            
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            
+            if !FileManager.default.fileExists(atPath: fileURL.path) {
+                FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+            }
+            
+            let handle = try FileHandle(forWritingTo: fileURL)
+            defer { try? handle.close() }
+            try handle.seekToEnd()
+            
+            for messageData in messageDatas {
+                let jsonData = try encoder.encode(messageData)
+                handle.write(jsonData)
+                handle.write(Data("\n".utf8))
+            }
+        } catch {
+            print("Failed to append \(messageDatas.count) messageDatas to chat messages: ", error)
         }
     }
 }

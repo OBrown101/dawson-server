@@ -10,12 +10,17 @@ import Foundation
 class Utility {
     
     static func inSessionDirectories(path: String, directories: [String]) -> Bool {
-        let fullPath = NSString(string: path).expandingTildeInPath
-        let fullURL  = URL(fileURLWithPath: fullPath).standardizedFileURL
-        
+        let fileURL = URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)
+            .resolvingSymlinksInPath()
+            .standardizedFileURL
+
         return directories.contains { dir in
-            let dirURL = URL(fileURLWithPath: dir).standardizedFileURL
-            return fullURL.path.hasPrefix(dirURL.path)
+            let dirURL = URL(fileURLWithPath: NSString(string: dir).expandingTildeInPath)
+                .resolvingSymlinksInPath()
+                .standardizedFileURL
+
+            return fileURL.path == dirURL.path ||
+                   fileURL.path.hasPrefix(dirURL.path + "/")
         }
     }
 }

@@ -9,7 +9,7 @@ import Foundation
 import Vapor
 import AnyCodable
 
-struct WSPacket: Codable {
+struct WSPacket: Codable, @unchecked Sendable {
     let type: PacketType
     let payload: AnyCodable
     
@@ -87,7 +87,14 @@ final class WebSocketServer: @unchecked Sendable {
               let text = String(data: data, encoding: .utf8) else { return }
         try? await ws.send(text)
     }
-
+    
+    private func sendTask(_ message: WSPacket, ws: WebSocket) {
+        Task { [weak self, message, ws] in
+            guard let self else { return }
+            await self.send(message, ws: ws)
+        }
+    }
+    
     func broadcast(_ message: WSPacket) {
         guard let data = try? JSONEncoder().encode(message),
               let text = String(data: data, encoding: .utf8) else { return }
@@ -101,10 +108,16 @@ extension WebSocketServer {
     
     private func handleUserData(_ userData: UserData, ws: WebSocket) async {
         guard let dawson = dawson else { return }
+        
         switch (userData.dataType) {
         case .textPrompt:
             guard let textPrompt: String = await guardPayload(userData.payload, dataType: userData.dataType.rawValue, ws: ws) else { return }
             
+            var deliveredUserData = userData
+            deliveredUserData.payload = AnyCodable("")
+            let response = WSPacket(type: .userData, payload: AnyCodable(deliveredUserData))
+            sendTask(response, ws: ws)
+                
             var dataIndex: [String: Int32] = [:]
             var currentRunUUID: String? = nil
             await dawson.getChatResponse(chatUUID: userData.chatUUID, runUUID: userData.dataUUID, prompt: textPrompt,
@@ -147,9 +160,7 @@ extension WebSocketServer {
                     )
                     let response = WSPacket(type: .agentData, payload: AnyCodable(agentData))
                     dataIndex[event.key] = (index + 1)
-                    Task {
-                        await self.send(response, ws: ws)
-                    }
+                    self.sendTask(response, ws: ws)
                 }
             )
             
@@ -209,9 +220,7 @@ extension WebSocketServer {
                 let response = WSPacket(type: .agentData, payload: AnyCodable(agentData))
                 dataIndex[event.key] = (index + 1)
                 
-                Task {
-                    await self.send(response, ws: ws)
-                }
+                self.sendTask(response, ws: ws)
             }
         )
         
@@ -255,9 +264,7 @@ extension WebSocketServer {
                 payload: payload
             )
             let response = WSPacket(type: .chatData, payload: AnyCodable(chatData))
-            Task {
-                await self.send(response, ws: ws)
-            }
+            self.sendTask(response, ws: ws)
             
         case .syncMsgs:
             var payload: AnyCodable
@@ -276,9 +283,7 @@ extension WebSocketServer {
                 payload: payload
             )
             let response = WSPacket(type: .chatData, payload: AnyCodable(chatData))
-            Task {
-                await self.send(response, ws: ws)
-            }
+            self.sendTask(response, ws: ws)
         }
     }
     
@@ -300,9 +305,7 @@ extension WebSocketServer {
                 payload: payload
             )
             let response = WSPacket(type: .configData, payload: AnyCodable(configData))
-            Task {
-                await self.send(response, ws: ws)
-            }
+            self.sendTask(response, ws: ws)
             
         case .upsertUser:
             guard let user: User = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
@@ -320,9 +323,7 @@ extension WebSocketServer {
                 payload: payload
             )
             let response = WSPacket(type: .configData, payload: AnyCodable(configData))
-            Task {
-                await self.send(response, ws: ws)
-            }
+            self.sendTask(response, ws: ws)
             
         case .updateProvider:
             guard let providerAPIKeys: [String: String] = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
@@ -340,9 +341,7 @@ extension WebSocketServer {
                 payload: payload
             )
             let response = WSPacket(type: .configData, payload: AnyCodable(configData))
-            Task {
-                await self.send(response, ws: ws)
-            }
+            self.sendTask(response, ws: ws)
         }
     }
 }
@@ -359,9 +358,7 @@ extension WebSocketServer {
         )
 
         let response = WSPacket(type: .agentData, payload: AnyCodable(agentData))
-        Task {
-            await self.send(response, ws: ws)
-        }
+        self.sendTask(response, ws: ws)
     }
     
     private func guardPayload<T: Decodable>(_ payload: AnyCodable, dataType: String, ws: WebSocket) async -> T? {

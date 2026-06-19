@@ -16,7 +16,7 @@ class PatchFile: PermissionAware {
         
         return [
             PermissionRequest(action: .read, target: path),
-            PermissionRequest(action: .write, target: diff)
+            PermissionRequest(action: .write, target: path)
         ]
     }
     

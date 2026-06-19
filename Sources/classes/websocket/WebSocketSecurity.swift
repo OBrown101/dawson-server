@@ -9,7 +9,7 @@ import Foundation
 
 final class WebSocketSecurity {
     
-    static let directory = DAWSON.workspace.appendingPathComponent("security")
+    static let directory = DAWSON.databank.appendingPathComponent("security")
     static let certPath = directory.appendingPathComponent("fullchain.pem")
     static let keyPath = directory.appendingPathComponent("privkey.pem")
     static let tokenPath = directory.appendingPathComponent("auth-token.txt")

@@ -20,7 +20,7 @@ class EnvAwareness: PermissionAware {
         return [
             "type": "function",
             "name": name,
-            "description": "Provides agent with current environmental awareness data such as time/date, timezone, operating system, DAWSON project root and workspace directories, etc.",
+            "description": "Provides agent with current environmental awareness data such as time/date, timezone, operating system, DAWSON project root directory, etc.",
             "parameters": [
                 "type": "object",
                 "properties": [:],
@@ -31,7 +31,7 @@ class EnvAwareness: PermissionAware {
     func anthropicSchema() -> [String : Any] {
         return [
             "name": name,
-            "description": "Provides agent with current environmental awareness data such as time/date, timezone, operating system, DAWSON project root and workspace directories, etc.",
+            "description": "Provides agent with current environmental awareness data such as time/date, timezone, operating system, DAWSON project root directory, etc.",
             "input_schema": [
                 "type": "object",
                 "properties": [:],
@@ -45,7 +45,7 @@ class EnvAwareness: PermissionAware {
             "type": "function",
             "function": [
                 "name": name,
-                "description": "Provides agent with current environmental awareness data such as time/date, timezone, operating system, DAWSON project root and workspace directories, etc.",
+                "description": "Provides agent with current environmental awareness data such as time/date, timezone, operating system, DAWSON project root and directory, etc.",
                 "parameters": [
                     "type": "object",
                     "required": [],
@@ -65,35 +65,17 @@ class EnvAwareness: PermissionAware {
         let dateString = formatter.string(from: now)
         let timezoneName = TimeZone.current.identifier
         let user = NSUserName()
-        let osInfo = getOSInfo()
 
         let info = """
         Date & time: \(dateString)
         Time zone: \(timezoneName)
-        Current Host Computer info: \(getOSInfo())
-        Current Host Computer user: \(user)
         DAWSON program root directory: \(DAWSON.root)
-        DAWSON workspace directory: \(DAWSON.workspace)
+        DAWSON program chat metadata: \(Chat.chatsMetadataDirectory)
+        DAWSON program chat conversation messages: \(Chat.chatsMessagesDirectory)
+        DAWSON program agent metadata: \(Agent.agentsMetadataDirectory)
+        DAWSON program agent conversation history: \(Agent.agentsHistoryDirectory)
         """
 
         return info
-    }
-    
-    private func getOSInfo() -> String {
-        let processInfo = ProcessInfo.processInfo
-        #if os(macOS)
-        return "macOS (version: \(processInfo.operatingSystemVersionString))"
-        #elseif os(Linux)
-        // Try common Linux version files
-        var linuxVersion = "Linux (unknown distribution)"
-        if let osRelease = try? String(contentsOfFile: "/etc/os-release", encoding: .utf8) {
-            linuxVersion = "Linux - " + (osRelease.components(separatedBy: .newlines).first { $0.hasPrefix("PRETTY_NAME") } ?? "Unknown")
-        }
-        return "\(linuxVersion) (kernel: \(processInfo.operatingSystemVersionString)"
-        #elseif os(Windows)
-        return "Windows (version: \(processInfo.operatingSystemVersionString))"
-        #else
-        return "Unknown Platform"
-        #endif
     }
 }

@@ -30,7 +30,7 @@ python/__pycache__/*
 python/pytest_cache/*
 
 # DAWSON specific (workspace root)
-workspace/*
+databank/*
 .mempalace/*
 
 # MemPalace specific
