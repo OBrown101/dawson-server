@@ -53,7 +53,9 @@ class Agent: Codable {
     var provider: LLMProvider
     let runner: AgentRunner
 
-    static let agentsDirectory = DAWSON.workspace.appendingPathComponent("agents")
+    static let agentsDirectory = DAWSON.databank.appendingPathComponent("agents")
+    static let agentsMetadataDirectory = agentsDirectory.appendingPathComponent("metadata")
+    static let agentsHistoryDirectory = agentsDirectory.appendingPathComponent("history")
     
     static var optionalTools: [Tool] {
         return [WriteFile(), SearchFile(), PatchFile(), ReplaceInFile(), ReadFile(), ListFiles(), Speak(), RichFormatter()]
@@ -407,7 +409,11 @@ class Agent: Codable {
             }
             newMessages.append(contentsOf: toolResults)
 
-            let promptMessage = (trimmedHistory + newMessages)
+            var promptMessage = trimmedHistory
+            if let workspacePrompt = AgentUtilities.getWorkspacesPrompt(mode: mode, directories) {
+                promptMessage.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: workspacePrompt))
+            }
+            promptMessage.append(contentsOf: newMessages)
             let response = await provider.send(
                 messages: promptMessage,
                 model: model,
@@ -527,12 +533,12 @@ extension Agent {
             }
         }
         
-        var soulPath: String? {
+        var dynamicSoulPath: String? {
             switch (self) {
             case .dawson:
-                "config/DAWSON_SOUL.md"
+                "souls/DAWSON_SOUL.md"
             case .squireBot:
-                "config/SQUIREBOT_SOUL.md"
+                "souls/SQUIREBOT_SOUL.md"
             case .page:
                 nil
             }
@@ -578,19 +584,19 @@ extension Agent {
 
 extension Agent {
     static func loadAllAgents() -> [Agent] {
-        guard let files = try? FileManager.default.contentsOfDirectory(at: agentsDirectory, includingPropertiesForKeys: nil) else { return [] }
+        guard let files = try? FileManager.default.contentsOfDirectory(at: agentsMetadataDirectory, includingPropertiesForKeys: nil) else { return [] }
 
         var agents: [Agent] = []
         for fileURL in files {
-            guard (fileURL.pathExtension == "json"),
+            guard fileURL.pathExtension == "json",
                   let data = try? Data(contentsOf: fileURL),
                   let agent = try? JSONDecoder().decode(Agent.self, from: data) else { continue }
-            
+
             agent.history = loadHistory(agentUUID: agent.uuid)
             agents.append(agent)
         }
-        
-        return agents.sorted { ($0.history.last?.createdAt.timeIntervalSince1970 ?? 0) > ($1.history.last?.createdAt.timeIntervalSince1970 ?? 0) }
+
+        return agents.sorted {($0.history.last?.createdAt.timeIntervalSince1970 ?? 0) > ($1.history.last?.createdAt.timeIntervalSince1970 ?? 0) }
     }
     
     static func loadAgent(agentUUID: String) -> Agent? {
@@ -619,8 +625,8 @@ extension Agent {
     
     func saveMetadata() {
         do {
-            try FileManager.default.createDirectory(at: Agent.agentsDirectory, withIntermediateDirectories: true)
-            
+            try FileManager.default.createDirectory(at: Agent.agentsMetadataDirectory, withIntermediateDirectories: true)
+
             let data = try JSONEncoder().encode(self)
             try data.write(to: Agent.metadataURL(agentUUID: uuid), options: .atomic)
             print("Successfully saved Agent \(uuid) metadata")
@@ -647,27 +653,29 @@ extension Agent {
     }
     
     private static func metadataURL(agentUUID: String) -> URL {
-        return Agent.agentsDirectory.appendingPathComponent("metadata_\(agentUUID).json")
+        return Agent.agentsMetadataDirectory.appendingPathComponent("\(agentUUID).json")
     }
 
     private static func historyURL(agentUUID: String) -> URL {
-        return Agent.agentsDirectory.appendingPathComponent("history_\(agentUUID).jsonl")
+        return Agent.agentsHistoryDirectory.appendingPathComponent("\(agentUUID).jsonl")
     }
     
     private func saveMessagesToHistory(_ messages: [Message], agentUUID: String) {
         do {
+            try FileManager.default.createDirectory(at: Agent.agentsHistoryDirectory, withIntermediateDirectories: true)
+
             let fileURL = Agent.historyURL(agentUUID: agentUUID)
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
-            
+
             if !FileManager.default.fileExists(atPath: fileURL.path) {
                 FileManager.default.createFile(atPath: fileURL.path, contents: nil)
             }
-            
+
             let handle = try FileHandle(forWritingTo: fileURL)
             defer { try? handle.close() }
             try handle.seekToEnd()
-            
+
             for message in messages {
                 let jsonData = try encoder.encode(message)
                 handle.write(jsonData)

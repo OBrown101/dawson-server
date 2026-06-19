@@ -17,8 +17,8 @@ class DAWSON: @unchecked Sendable {
         .homeDirectoryForCurrentUser
         .appendingPathComponent("DAWSON")
 
-    static let workspace = DAWSON.root
-        .appendingPathComponent("workspace")
+    static let databank = DAWSON.root
+        .appendingPathComponent("databank")
 
     static let primaryChatUUID = "PRIMARY_CHAT"
     static let primaryAgentUUID = "PRIMARY_AGENT"

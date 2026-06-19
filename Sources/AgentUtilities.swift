@@ -8,7 +8,7 @@
 import Foundation
 
 class AgentUtilities {
-    static var convSummaryPrompt: String {
+    static let convSummaryPrompt =
         """
         You are generating a chat subtitle.
 
@@ -32,9 +32,8 @@ class AgentUtilities {
         Swift concurrency issue
         Compose Multiplatform icons
         """
-    }
     
-    static var memorySessionPrompt: String {
+    static let memorySessionPrompt =
         """
         You are closing this session.
 
@@ -50,7 +49,6 @@ class AgentUtilities {
         Do not respond to the user.
         Only call Mempalace tools if needed.
         """
-    }
     
     static func userInputText(request: UserInputRequest, response: UserInputResponse) -> String {
         switch (request.type) {
@@ -87,5 +85,29 @@ class AgentUtilities {
             \(response.responseText ?? "")
             """
         }
+    }
+    
+    static func getWorkspacesPrompt(mode: ModeType, _ directories: [String]) -> String? {
+        if (mode == .egg) {
+            return nil
+        }
+        let directoryList = directories
+            .map { "- \($0)" }
+            .joined(separator: "\n")
+
+        return """
+            ## WORKSPACE ACCESS ##
+
+            The directories below are the only user-selected workspaces available for this chat-session:
+
+            \(directoryList)
+
+            Rules:
+            - Do not search outside these directories.
+            - Do not read, write, patch, list, or reference files outside these directories.
+            - If the user asks about a file/project/folder without an absolute path, search only within these directories.
+            - If something cannot be found inside these directories, say that it is not available with the current session settings.
+            - Treat this list as current for this run; it may change between runs.
+            """
     }
 }

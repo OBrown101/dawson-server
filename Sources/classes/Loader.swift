@@ -11,11 +11,12 @@ class Loader: @unchecked Sendable {
     static let shared = Loader()
     
     func buildBaseSystemPrompt(agent: Agent.AgentType) -> String {
-        let soul = loadAgentSoul(agent)
+        let primarySoul = loadAgentPrimarySoul(agent)
+        let dynamicSoul = loadAgentDynamicSoul(agent)
         let memorySchema = loadMemory()
         let skillSummaries = loadSkillSummaries()
-        let basicInfo = loadBasicInfo()
-        return [soul, basicInfo, memorySchema, skillSummaries].joined(separator: "\n")
+//        let basicInfo = loadBasicInfo()
+        return [primarySoul, dynamicSoul, memorySchema, skillSummaries].joined(separator: "\n")
     }
     
     func loadBasicInfo() -> String {
@@ -43,19 +44,31 @@ class Loader: @unchecked Sendable {
         """
     }
     
-    func loadAgentSoul(_ agent: Agent.AgentType) -> String {
-        guard let soulPath = agent.soulPath else { return "" }
+    func loadAgentPrimarySoul(_ agent: Agent.AgentType) -> String {
+        switch (agent) {
+        case .dawson:
+            return dawsonPrimarySoul
+        case .squireBot:
+            return squirebotPrimarySoul
+        case .page:
+            return ""
+        }
+    }
+    
+    func loadAgentDynamicSoul(_ agent: Agent.AgentType) -> String {
+        guard let soulPath = agent.dynamicSoulPath else { return "" }
         
-        let url = DAWSON.workspace.appendingPathComponent(soulPath)
+        let url = DAWSON.root.appendingPathComponent(soulPath)
         if let content = try? String(contentsOf: url) {
             return content
         }
-        print("Failed to load agent's soul at: \(url.absoluteString)")
-        return "Failed to load the agent's soul/identity. Tell user about the issue and ask for help."
+        print("Failed to load agent's dynamic soul at: \(url.absoluteString)")
+        return ""
     }
     
     func loadSkillSummaries() -> String {
         let skills = SkillHandler.shared.loadSkills()
+        print("Loaded \(skills.count) Skills")
         if (skills.isEmpty) { return "" }
         
         let summaries = skills.map { skill in
@@ -68,8 +81,16 @@ class Loader: @unchecked Sendable {
         
         return """
         ## BRIEF SUMMARY FOR EACH OF YOUR SKILLS ##
-        These are lightweight summaries of the skills available to you. If a task matches one of these
-        descriptions, load the full SKILL.md from the listed directory to access the complete instructions.
+        These are lightweight summaries of the skills available to you. Before beginning any multi-step task, check whether one of these skills matches. 
+        Skills are instruction packs, not executable tools.
+
+        When a user request matches a skill:
+        1. Call get_full_skill to read the skill's SKILL.md.
+        2. Follow the instructions from that skill using your normal tools.
+        3. Do not try to "run" or "execute" the skill.
+        4. The skill directory is only where the instructions live; it is not the target project unless the user explicitly says so.
+
+        Available skills:
         
         \(summaries)
         ## --- ##

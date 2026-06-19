@@ -14,7 +14,7 @@ struct UserData: Codable {
     let agentUUID: String
     let userUUID: String
     let dataType: DataType
-    let payload: AnyCodable
+    var payload: AnyCodable
     
     enum DataType: String, Codable {
         case textPrompt = "TEXT_PROMPT"

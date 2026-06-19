@@ -13,7 +13,7 @@ class User: Codable {
     var notes: [String] = []     // Short notes Dawson makes about the user (e.g. hobbies, personality)
     var updatedTimestamp: Int64
     
-    static let usersDirectory = (DAWSON.workspace).appendingPathComponent("users")
+    static let usersDirectory = (DAWSON.databank).appendingPathComponent("users")
     
     init(uuid: String, name: String, notes: [String] = [], updatedTimestamp: Int64 = Int64(Date.now.timeIntervalSince1970)) {
         self.uuid = uuid
