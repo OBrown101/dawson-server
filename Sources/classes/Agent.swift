@@ -278,9 +278,9 @@ class Agent: Codable {
                 messages: loopMessages,
                 onEvent: onEvent
             )
+            await setSummary(history)
         }
         
-        await setSummary()
         saveMessagesToHistory(loopMessages, agentUUID: uuid)
         saveMetadata()
         await runner.setRunning(false)
@@ -347,6 +347,7 @@ class Agent: Codable {
                 messages: loopMessages,
                 onEvent: onEvent
             )
+            await setSummary(history)
         }
             
         saveMessagesToHistory(loopMessages, agentUUID: self.uuid)
@@ -481,16 +482,16 @@ class Agent: Codable {
         }
     }
     
-    private func setSummary() async {
+    private func setSummary(_ messages: [Message]) async {
         let runUUID = UUID().uuidString
         let recentMsgCnt = 50
-        var messages: [Message] = history
+        var msgs: [Message] = messages
             .filter { $0.role == MsgSource.user.name || $0.role == MsgSource.assistant.name }
             .suffix(recentMsgCnt)
-        messages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: AgentUtilities.convSummaryPrompt))
+        msgs.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: AgentUtilities.convSummaryPrompt))
         
         let response = await provider.send(
-            messages: messages,
+            messages: msgs,
             model: model,       // Eventually change this to be subagent model (faster)
             tools: [],
             useThinking: useThinking,

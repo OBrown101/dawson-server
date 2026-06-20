@@ -34,7 +34,7 @@ app.http.server.configuration.tlsConfiguration = .makeServerConfiguration(
     )
 )
 
-app.webSocket("dawson") { req, ws in
+app.webSocket("dawson", maxFrameSize: 64_000) { req, ws in
     guard req.headers.bearerAuthorization?.token == (try? WebSocketSecurity.authToken()) else {
         try? await ws.close(code: .policyViolation)
         return

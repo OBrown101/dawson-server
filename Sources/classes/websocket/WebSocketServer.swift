@@ -9,26 +9,12 @@ import Foundation
 import Vapor
 import AnyCodable
 
-struct WSPacket: Codable, @unchecked Sendable {
-    let type: PacketType
-    let payload: AnyCodable
-    
-    enum PacketType: String, Codable {
-        case ping = "PING"
-        case pong = "PONG"
-        case userData = "USER_DATA"
-        case agentData = "AGENT_DATA"
-        case chatData = "CHAT_DATA"
-        case configData = "CONFIG_DATA"
-        case userInputRequest = "USER_INPUT_REQUEST"
-        case userInputRequestResponse = "USER_INPUT_REQUEST_RESPONSE"
-        case error = "ERROR"
-    }
-}
-
 final class WebSocketServer: @unchecked Sendable {
 
     weak var dawson: DAWSON?
+    
+    private var chunkBuffers: [String: [String?]] = [:]
+    private let maxPacketChars = 32_000
     
     private var connections: [UUID: WebSocket] = [:]
 
@@ -55,6 +41,11 @@ final class WebSocketServer: @unchecked Sendable {
         print("raw json received: \(json)")
         guard let data = json.data(using: .utf8),
               let packet: WSPacket = try? JSONDecoder().decode(WSPacket.self, from: data) else { return }
+        
+        if (packet.isChunk) {
+            await handleChunk(packet, ws: ws)
+            return
+        }
         print("packet: \(packet.payload)")
         
         switch (packet.type) {
@@ -81,11 +72,35 @@ final class WebSocketServer: @unchecked Sendable {
             await send(WSPacket(type: .error, payload: "Unknown packet type"), ws: ws)
         }
     }
+    
+    private func handleChunk(_ packet: WSPacket, ws: WebSocket) async {
+        guard let transferUUID = packet.transferUUID,
+              let index = packet.index,
+              let total = packet.total,
+              let chunkText: String = await guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
+
+        if (chunkBuffers[transferUUID] == nil) {
+            chunkBuffers[transferUUID] = Array(repeating: nil, count: total)
+        }
+
+        guard (index >= 0),
+              (index < (chunkBuffers[transferUUID]?.count ?? 0)) else { return }
+
+        chunkBuffers[transferUUID]?[index] = chunkText
+
+        guard let buffer = chunkBuffers[transferUUID],
+              buffer.allSatisfy({ $0 != nil }) else { return }
+
+        chunkBuffers.removeValue(forKey: transferUUID)
+
+        let reassembled = buffer.compactMap { $0 }.joined()
+        await onReceive(json: reassembled, ws: ws)
+    }
 
     private func send(_ message: WSPacket, ws: WebSocket) async {
         guard let data = try? JSONEncoder().encode(message),
               let text = String(data: data, encoding: .utf8) else { return }
-        try? await ws.send(text)
+        await sendEncoded(text, originalType: message.type, ws: ws)
     }
     
     private func sendTask(_ message: WSPacket, ws: WebSocket) {
@@ -95,11 +110,34 @@ final class WebSocketServer: @unchecked Sendable {
         }
     }
     
+    private func sendEncoded(_ text: String, originalType: WSPacket.PacketType, ws: WebSocket) async {
+        if (text.count <= maxPacketChars) {
+            try? await ws.send(text)
+            return
+        }
+
+        let transferUUID = UUID().uuidString
+        let chunks = text.chunked(into: maxPacketChars)
+
+        for index in chunks.indices {
+            let chunkPacket = WSPacket(
+                type: originalType,
+                payload: AnyCodable(chunks[index]),
+                transferUUID: transferUUID,
+                index: index,
+                total: chunks.count
+            )
+
+            guard let data = try? JSONEncoder().encode(chunkPacket),
+                  let chunkText = String(data: data, encoding: .utf8) else { continue }
+
+            try? await ws.send(chunkText)
+        }
+    }
+    
     func broadcast(_ message: WSPacket) {
-        guard let data = try? JSONEncoder().encode(message),
-              let text = String(data: data, encoding: .utf8) else { return }
         for ws in connections.values {
-            ws.send(text)
+            sendTask(message, ws: ws)
         }
     }
 }
