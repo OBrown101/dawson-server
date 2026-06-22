@@ -12,6 +12,7 @@ class MempalaceKgStats: Tool {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": "Knowledge graph overview: entities, triples, current vs expired facts, relationship types.",
             "parameters": [

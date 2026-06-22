@@ -12,6 +12,7 @@ class GetFullSkill: Tool {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": """
             Loads the full contents of a skill's SKILL.md file using the skill name. Use this when a task matches one of the available skill summaries and the agent needs the detailed instructions.

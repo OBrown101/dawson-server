@@ -12,6 +12,7 @@ class MempalaceTraverse: Tool {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": """
             Walk the palace graph from a room. Shows connected ideas across wings — the tunnels. Like following a thread through the palace: start at 'chromadb‑setup' in wing_code, discover it connects to wing_myproject (planning) and wing_user (feelings about it).

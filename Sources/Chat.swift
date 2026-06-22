@@ -27,7 +27,7 @@ class Chat: Codable {
         self.agentUUID = agentUUID
         self.title = title
         self.subtitle = subtitle
-        self.updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
+        self.updatedTimestamp = Date.now.epochMillis
     }
     
     enum CodingKeys: String, CodingKey {
@@ -78,7 +78,7 @@ class Chat: Codable {
         let summary = AgentHandler.shared.getAgent(agentUUID)?.getSummary() ?? ""
         title = (title.isEmpty) ? summary : title
         subtitle = summary
-        updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
+        updatedTimestamp = Date.now.epochMillis
         saveMetadata()
     }
 }

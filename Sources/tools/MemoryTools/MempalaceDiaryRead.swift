@@ -12,6 +12,7 @@ class MempalaceDiaryRead: Tool {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": """
             Read your recent diary entries (in AAAK). See what past versions of yourself recorded — your journal across sessions.

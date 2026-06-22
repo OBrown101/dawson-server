@@ -9,7 +9,9 @@ import Foundation
 import AnyCodable
 
 struct ConfigData: Codable {
-    let userUUID: String
+    let userUUID: String?
+    let agentUUID: String?
+    let providerType: ProviderClient.ProviderType?
     let dataType: DataType
     let payload: AnyCodable
     

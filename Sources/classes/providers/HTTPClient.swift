@@ -99,7 +99,7 @@ final class ProviderClient: Sendable {
                     
                     if let httpResponse = response as? HTTPURLResponse,
                        !(200...299).contains(httpResponse.statusCode) {
-                        throw NSError(domain: "LLMClient", code: httpResponse.statusCode)
+                        throw getHTTPError(domain: "LLMClient", response: httpResponse)
                     }
                     
                     for try await line in bytes.lines {
@@ -173,7 +173,8 @@ final class ProviderClient: Sendable {
 
         if let httpResponse = response as? HTTPURLResponse,
            !(200...299).contains(httpResponse.statusCode) {
-            throw NSError(domain: "LLMClient", code: httpResponse.statusCode)
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw getHTTPError(domain: "LLMClient", response: httpResponse, body: body)
         }
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -181,5 +182,18 @@ final class ProviderClient: Sendable {
         }
 
         return json
+    }
+    
+    private func getHTTPError(domain: String, response: HTTPURLResponse, body: String = "") -> NSError {
+        return NSError(
+            domain: "LLMClient",
+            code: response.statusCode,
+            userInfo:  [
+                NSLocalizedDescriptionKey: body.isEmpty
+                    ? "HTTP \(response.statusCode)"
+                    : "HTTP \(response.statusCode): \(body)"
+            ]
+        )
+
     }
 }

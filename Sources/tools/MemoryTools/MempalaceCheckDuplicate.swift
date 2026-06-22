@@ -12,6 +12,7 @@ class MempalaceCheckDuplicate: Tool {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": "Check if content already exists in the palace before filing",
             "parameters": [

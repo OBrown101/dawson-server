@@ -19,6 +19,7 @@ class RunPythonScript: PermissionAware {
     
     func openAISchema() -> [String: Any] {
         return [
+            "type": "function",
             "name": name,
             "description":
                 """

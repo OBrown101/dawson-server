@@ -17,6 +17,7 @@ struct AgentData: Codable {
     let payload: AnyCodable
     
     enum DataType: String, Codable {
+        case agentState = "AGENT_STATE"
         case textThinking = "TEXT_THINKING"
         case textResponse = "TEXT_RESPONSE"
         case dataResponse = "DATA_RESPONSE"

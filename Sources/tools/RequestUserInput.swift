@@ -10,6 +10,7 @@ class RequestUserInput: Tool {
     
     func openAISchema() -> [String: Any] {
         return [
+            "type": "function",
             "name": name,
             "description": "Pauses main agent loop and requests input from the user. Used for additional information, answer to questions, or any other input from the user.",
             "parameters": [

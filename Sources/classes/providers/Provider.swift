@@ -36,7 +36,7 @@ class Provider: Codable {
     let models: [LLMModel]
     let updatedTimestamp: Int64
     
-    init(type: ProviderClient.ProviderType, apiKey: String, models: [LLMModel], updatedTimestamp: Int64 = Int64(Date.now.timeIntervalSince1970)) {
+    init(type: ProviderClient.ProviderType, apiKey: String, models: [LLMModel], updatedTimestamp: Int64 = Date.now.epochMillis) {
         self.type = type
         self.apiKey = apiKey
         self.models = models
@@ -50,6 +50,11 @@ class Provider: Codable {
             providers.append(Provider(type: type, apiKey: (type.apiKey ?? ""), models: (models ?? [])))
         }
         return providers
+    }
+    
+    static func getProvider(_ type: ProviderClient.ProviderType) async -> Provider {
+        let models = try? await fetchModels(for: type)
+        return Provider(type: type, apiKey: (type.apiKey ?? ""), models: (models ?? []))
     }
     
     static func provider(for type: ProviderClient.ProviderType) -> LLMProvider {

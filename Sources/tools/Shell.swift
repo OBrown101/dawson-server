@@ -20,6 +20,7 @@ class Shell: PermissionAware {
     
     func openAISchema() -> [String: Any] {
         return [
+            "type": "function",
             "name": name,
             "description": "Executes a shell command on Linux, macOS, or Windows and returns stdout/stderr",
             "parameters": [

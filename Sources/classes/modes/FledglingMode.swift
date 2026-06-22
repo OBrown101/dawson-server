@@ -37,7 +37,7 @@ class FledglingMode: Mode {
         guard let path = request.target else {
             return PermissionEvaluation(request: request, decision: .denied(reason: "Missing read target path."))
         }
-        if (Utility.inSessionDirectories(path: path, directories: agent.directories)) {
+        if (FileUtilities.inSessionDirectories(path: path, directories: agent.directories)) {
             return PermissionEvaluation(request: request, decision: .allowed)
         } else {
             return PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Read outside session workspace: \(path)"))
@@ -49,7 +49,7 @@ class FledglingMode: Mode {
             return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Missing write target path."))
         }
 
-        if (Utility.inSessionDirectories(path: path, directories: agent.directories)) {
+        if (FileUtilities.inSessionDirectories(path: path, directories: agent.directories)) {
             return PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Write operation requires user approval: \(path)"))
         } else {
             return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Writes outside workspace are forbidden."))
@@ -78,7 +78,7 @@ class FledglingMode: Mode {
                 throw ModePermissionError.forbidden
             case .read, .write:
                 guard let path = request.target else { break }
-                let inDirectories = Utility.inSessionDirectories(path: path, directories: agent.directories)
+                let inDirectories = FileUtilities.inSessionDirectories(path: path, directories: agent.directories)
                 guard (inDirectories) else { throw ModePermissionError.forbidden }
             case .command:
                 throw ModePermissionError.forbidden

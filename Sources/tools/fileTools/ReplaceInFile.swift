@@ -24,6 +24,7 @@ class ReplaceInFile: PermissionAware {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": "Replaces the first occurrence of exact text in a file.",
             "parameters": [

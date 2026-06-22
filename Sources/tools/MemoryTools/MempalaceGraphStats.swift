@@ -12,6 +12,7 @@ class MempalaceGraphStats: Tool {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": "Palace graph overview: total rooms, tunnel connections, edges between wings.",
             "parameters": [

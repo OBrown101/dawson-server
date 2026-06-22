@@ -15,7 +15,7 @@ class User: Codable {
     
     static let usersDirectory = (DAWSON.databank).appendingPathComponent("users")
     
-    init(uuid: String, name: String, notes: [String] = [], updatedTimestamp: Int64 = Int64(Date.now.timeIntervalSince1970)) {
+    init(uuid: String, name: String, notes: [String] = [], updatedTimestamp: Int64 = Date.now.epochMillis) {
         self.uuid = uuid
         self.name = name
         self.notes = notes

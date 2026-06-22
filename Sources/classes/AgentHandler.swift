@@ -10,8 +10,8 @@ import Foundation
 class AgentHandler: @unchecked Sendable {
     static let shared = AgentHandler()
     
-    static let defaultThoughtWindow = 2500
-    static let defaultContextWindow: Int32 = 32_000
+    static let defaultThoughtWindow = 0
+    static let defaultContextWindow: Int32 = 128_000
     
     private var activeAgents: [String: Agent] = [:]
 
@@ -28,10 +28,12 @@ class AgentHandler: @unchecked Sendable {
         activeAgents[agent.uuid]?.contextWindow = agent.contextWindow
         activeAgents[agent.uuid]?.useThinking = agent.useThinking
         activeAgents[agent.uuid]?.directories = agent.directories
-        activeAgents[agent.uuid]?.updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
+        activeAgents[agent.uuid]?.updatedTimestamp = Date.now.epochMillis
         activeAgents[agent.uuid]?.saveMetadata()
         
-        DAWSON.shared.broadcastAgentUpsert(agent)
+        if let updatedAgent = activeAgents[agent.uuid] {
+            DAWSON.shared.broadcastAgentUpsert(updatedAgent)
+        }
     }
     
     func deleteAgent(_ agentUUID: String) {
@@ -51,8 +53,8 @@ class AgentHandler: @unchecked Sendable {
         }
     }
     
-    func getAgents() -> [Agent] {
-        return activeAgents.values.map { $0 }
+    func getAgents(userUUID: String) -> [Agent] {
+        return activeAgents.values.filter({ $0.userUUID == userUUID }).map { $0 }
     }
     
     func getAgent(_ agentUUID: String) -> Agent? {
@@ -83,6 +85,7 @@ class AgentHandler: @unchecked Sendable {
             activeAgents[uuid] = newAgent
             newAgent.saveMetadata()
             print("New agent (\(uuid)) spawned.")
+            DAWSON.shared.broadcastAgentUpsert(newAgent)
         } else {
             print("Agent (\(uuid)) already exists.")
         }

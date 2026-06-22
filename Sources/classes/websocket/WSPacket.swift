@@ -32,6 +32,7 @@ struct WSPacket: Codable, @unchecked Sendable {
     enum PacketType: String, Codable {
         case ping = "PING"
         case pong = "PONG"
+        case syncState = "SYNC_STATE"
         case userData = "USER_DATA"
         case agentData = "AGENT_DATA"
         case chatData = "CHAT_DATA"
