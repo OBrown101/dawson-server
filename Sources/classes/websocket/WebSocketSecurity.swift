@@ -13,10 +13,13 @@ final class WebSocketSecurity {
     static let certPath = directory.appendingPathComponent("fullchain.pem")
     static let keyPath = directory.appendingPathComponent("privkey.pem")
     static let tokenPath = directory.appendingPathComponent("auth-token.txt")
+    static let fingerprintPath = directory.appendingPathComponent("auth-fingerprint.txt")
 
     static func setup() throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
+        let didCreateCertificate: Bool
+        
         if (!FileManager.default.fileExists(atPath: certPath.path) ||
             !FileManager.default.fileExists(atPath: keyPath.path)) {
 
@@ -30,6 +33,9 @@ final class WebSocketSecurity {
                 "-nodes",
                 "-subj", "/CN=DAWSON Local"
             ])
+            didCreateCertificate = true
+        } else {
+          didCreateCertificate = false
         }
 
         if !FileManager.default.fileExists(atPath: tokenPath.path) {
@@ -39,15 +45,30 @@ final class WebSocketSecurity {
             try token.write(to: tokenPath, atomically: true, encoding: .utf8)
         }
         
+        if (didCreateCertificate || !FileManager.default.fileExists(atPath: fingerprintPath.path)) {
+            let fingerprint = try certificateFingerprint()
+
+            try fingerprint.write(
+                to: fingerprintPath,
+                atomically: true,
+                encoding: .utf8
+            )
+        }
+
+        
         print("====================================")
-        print("DAWSON SERVER")
+        print("DAWSON-CORE SERVER")
         print("Auth Token: \(try authToken())")
-        print("Fingerprint: \(try certificateFingerprint())")
+        print("Fingerprint: \(try authFingerprint())")
         print("====================================")
     }
 
     static func authToken() throws -> String {
         try String(contentsOf: tokenPath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    static func authFingerprint() throws -> String {
+        try String(contentsOf: fingerprintPath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func certificateFingerprint() throws -> String {

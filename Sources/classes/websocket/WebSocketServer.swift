@@ -38,7 +38,7 @@ final class WebSocketServer: @unchecked Sendable {
     }
 
     private func onReceive(json: String, ws: WebSocket) async {
-        print("raw json received: \(json)")
+//        print("raw json received: \(json)")
         guard let data = json.data(using: .utf8),
               let packet: WSPacket = try? JSONDecoder().decode(WSPacket.self, from: data) else { return }
         
@@ -46,26 +46,30 @@ final class WebSocketServer: @unchecked Sendable {
             await handleChunk(packet, ws: ws)
             return
         }
-        print("packet: \(packet.payload)")
+//        print("packet: \(packet.payload)")
         
         switch (packet.type) {
         case .ping:
             await send(WSPacket(type: .pong, payload: "pong"), ws: ws)
             
+        case .syncState:
+            guard let payload: SyncState = guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
+            await handleSyncState(payload, ws: ws)
+            
         case .userData:
-            guard let payload: UserData = await guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
+            guard let payload: UserData = guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
             await handleUserData(payload, ws: ws)
 
         case .chatData:
-            guard let payload: ChatData = await guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
+            guard let payload: ChatData = guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
             await handleChatData(payload, ws: ws)
             
         case .userInputRequestResponse:
-            guard let payload: UserInputResponse = await guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
+            guard let payload: UserInputResponse = guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
             await handleUserInputResponse(payload, ws: ws)
             
         case .configData:
-            guard let payload: ConfigData = await guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
+            guard let payload: ConfigData = guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
             await handleConfigData(payload, ws: ws)
             
         default:
@@ -77,7 +81,7 @@ final class WebSocketServer: @unchecked Sendable {
         guard let transferUUID = packet.transferUUID,
               let index = packet.index,
               let total = packet.total,
-              let chunkText: String = await guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
+              let chunkText: String = guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
 
         if (chunkBuffers[transferUUID] == nil) {
             chunkBuffers[transferUUID] = Array(repeating: nil, count: total)
@@ -149,7 +153,7 @@ extension WebSocketServer {
         
         switch (userData.dataType) {
         case .textPrompt:
-            guard let textPrompt: String = await guardPayload(userData.payload, dataType: userData.dataType.rawValue, ws: ws) else { return }
+            guard let textPrompt: String = guardPayload(userData.payload, dataType: userData.dataType.rawValue, ws: ws) else { return }
             
             var deliveredUserData = userData
             deliveredUserData.payload = AnyCodable("")
@@ -166,6 +170,10 @@ extension WebSocketServer {
                     currentRunUUID = runUUID
                     
                     switch event {
+                    case .agentState(let state):
+                        dataType = .agentState
+                        payload = AnyCodable(state)
+                        
                     case .thinking(let text):
                         dataType = .textThinking
                         payload = AnyCodable(text)
@@ -224,6 +232,10 @@ extension WebSocketServer {
                 currentRunUUID = runUUID
 
                 switch event {
+                case .agentState(let state):
+                    dataType = .agentState
+                    payload = AnyCodable(state)
+                    
                 case .thinking(let text):
                     dataType = .textThinking
                     payload = AnyCodable(text)
@@ -273,11 +285,11 @@ extension WebSocketServer {
         
         switch (chatData.dataType) {
         case .upsert:
-            guard let chat: Chat = await guardPayload(chatData.payload, dataType: chatData.dataType.rawValue, ws: ws) else { return }
+            guard let chat: Chat = guardPayload(chatData.payload, dataType: chatData.dataType.rawValue, ws: ws) else { return }
             await dawson.upsertChat(chat)
             
         case .delete:
-            guard let chatUUID: String = await guardPayload(chatData.payload, dataType: chatData.dataType.rawValue, ws: ws) else { return }
+            guard let chatUUID: String = guardPayload(chatData.payload, dataType: chatData.dataType.rawValue, ws: ws) else { return }
             dawson.deleteChat(chatUUID)
             
         case .syncChat:
@@ -288,7 +300,7 @@ extension WebSocketServer {
                       let json = try? JSONDecoder().decode(AnyCodable.self, from: encoded) else { return }
                 payload = json
             } else {
-                let chats = dawson.getAllChats()
+                let chats = dawson.getAllChats(userUUID: chatData.userUUID)
                 guard let encoded = try? JSONEncoder().encode(chats),
                       let json = try? JSONDecoder().decode(AnyCodable.self, from: encoded) else { return }
                 payload = json
@@ -328,7 +340,7 @@ extension WebSocketServer {
     private func handleConfigData(_ configData: ConfigData, ws: WebSocket) async {
         switch (configData.dataType) {
         case .updateAgent:
-            guard let agent: Agent = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
+            guard let agent: Agent = guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
             AgentHandler.shared.updateAgent(agent: agent)
             
         case .deleteAgent:
@@ -336,51 +348,125 @@ extension WebSocketServer {
             break
             
         case .syncAgents:
-            let payload = AnyCodable(AgentHandler.shared.getAgents())
+            var payload: AnyCodable
+            var respDataType = configData.dataType
+            if let agentUUID = configData.agentUUID {
+                payload = AnyCodable(AgentHandler.shared.getAgent(agentUUID))
+                respDataType = .updateAgent
+            } else if let userUUID = configData.userUUID {
+                payload = AnyCodable(AgentHandler.shared.getAgents(userUUID: userUUID))
+            } else {
+                await send(WSPacket(type: .error, payload: "Missing userUUID to syncAgents (ConfigData)"), ws: ws)
+                return
+            }
+            
             let configData = ConfigData(
                 userUUID: configData.userUUID,
-                dataType: configData.dataType,
+                agentUUID: configData.agentUUID,
+                providerType: configData.providerType,
+                dataType: respDataType,
                 payload: payload
             )
             let response = WSPacket(type: .configData, payload: AnyCodable(configData))
             self.sendTask(response, ws: ws)
             
         case .upsertUser:
-            guard let user: User = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
+            guard let user: User = guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
             UserHandler.shared.upsertUser(user)
             
         case .deleteUser:
-            guard let userUUID: String = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
+            guard let userUUID: String = guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
             UserHandler.shared.deleteUser(userUUID)
             
         case .syncUsers:
-            let payload = AnyCodable(UserHandler.shared.getUsers())
+            var payload: AnyCodable
+            var respDataType = configData.dataType
+            if let userUUID = configData.userUUID {
+                payload = AnyCodable(UserHandler.shared.getUser(userUUID))
+                respDataType = .upsertUser
+            } else {
+                payload = AnyCodable(UserHandler.shared.getUsers())
+            }
+            
             let configData = ConfigData(
                 userUUID: configData.userUUID,
-                dataType: configData.dataType,
+                agentUUID: configData.agentUUID,
+                providerType: configData.providerType,
+                dataType: respDataType,
                 payload: payload
             )
             let response = WSPacket(type: .configData, payload: AnyCodable(configData))
             self.sendTask(response, ws: ws)
             
         case .updateProvider:
-            guard let providerAPIKeys: [String: String] = await guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
+            guard let providerAPIKeys: [String: String] = guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
             providerAPIKeys.forEach { providerName, apiKey in
                 guard let providerType = ProviderClient.ProviderType(rawValue: providerName) else { return }
                 ProviderClient.ProviderType.setAPIKey(providerType, key: apiKey)
             }
             
         case .syncProviders:
-            let providers = await Provider.getProviders()
-            let payload = AnyCodable(providers)
+            var payload: AnyCodable
+            var respDataType = configData.dataType
+            if let providerType = configData.providerType {
+                payload = await AnyCodable(Provider.getProvider(providerType))
+            } else {
+                payload = await AnyCodable(Provider.getProviders())
+            }
+            
             let configData = ConfigData(
                 userUUID: configData.userUUID,
-                dataType: configData.dataType,
+                agentUUID: configData.agentUUID,
+                providerType: configData.providerType,
+                dataType: respDataType,
                 payload: payload
             )
             let response = WSPacket(type: .configData, payload: AnyCodable(configData))
             self.sendTask(response, ws: ws)
         }
+    }
+    
+    private func handleSyncState(_ syncState: SyncState, ws: WebSocket) async {
+        guard let dawson = dawson else { return }
+
+        let agents = AgentHandler.shared.getAgents(userUUID: syncState.userUUID)
+        let agentStates = agents.reduce(into: [String: Int64]()) { states, agent in
+            states[agent.uuid] = agent.updatedTimestamp
+        }
+
+        let users = UserHandler.shared.getUsers()
+        let userStates = users.reduce(into: [String: Int64]()) { states, user in
+            states[user.uuid] = user.updatedTimestamp
+        }
+
+        let providers = await Provider.getProviders()
+        let providerStates = providers.reduce(into: [String: Int64]()) { states, provider in
+            states[provider.type.rawValue] = provider.updatedTimestamp
+        }
+
+        let chats = dawson.getAllChats(userUUID: syncState.userUUID)
+        let chatStates = chats.reduce(into: [String: Int64]()) { states, chat in
+            states[chat.uuid] = chat.updatedTimestamp
+        }
+
+        let chatMessageStates = chats.reduce(into: [String: Int64]()) { states, chat in
+            let newestTimestamp = dawson.getMessagesForChat(chat.uuid)
+                .map { $0.timestamp }
+                .max() ?? 0
+
+            states[chat.uuid] = newestTimestamp
+        }
+
+        let response = SyncState(
+            userUUID: syncState.userUUID,
+            agentStates: agentStates,
+            userStates: userStates,
+            providerStates: providerStates,
+            chatStates: chatStates,
+            chatMessageStates: chatMessageStates
+        )
+
+        self.sendTask(WSPacket(type: .syncState, payload: AnyCodable(response)), ws: ws)
     }
 }
 
@@ -399,10 +485,10 @@ extension WebSocketServer {
         self.sendTask(response, ws: ws)
     }
     
-    private func guardPayload<T: Decodable>(_ payload: AnyCodable, dataType: String, ws: WebSocket) async -> T? {
+    private func guardPayload<T: Decodable>(_ payload: AnyCodable, dataType: String, ws: WebSocket) -> T? {
         guard let data = try? JSONEncoder().encode(payload),
               let object = try? JSONDecoder().decode(T.self, from: data) else {
-            await send(WSPacket(type: .error, payload: "Invalid \(dataType) payload"), ws: ws)
+            sendTask(WSPacket(type: .error, payload: "Invalid \(dataType) payload"), ws: ws)
             return nil
         }
         return object

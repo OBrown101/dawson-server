@@ -14,62 +14,12 @@ import System
 class MempalaceMemory: @unchecked Sendable {
     static let shared = MempalaceMemory()
     
-    let palacePath = DAWSON.root.appendingPathComponent(".mempalace")
-    
-    /*
-    private var inputPipe: Pipe?
-    private var outputPipe: Pipe?
-    private var errorPipe: Pipe?
-    
-    func initMCP() {
-        let inputPipe = Pipe()
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-
-        self.inputPipe = inputPipe
-        self.outputPipe = outputPipe
-        self.errorPipe = errorPipe
-        
-        Task {
-            do {
-                let transport = StdioTransport(
-                    input: FileDescriptor(rawValue: outputPipe.fileHandleForReading.fileDescriptor),
-                    output: FileDescriptor(rawValue: inputPipe.fileHandleForWriting.fileDescriptor)
-                )
-                
-                _ = try PythonHandler.shared.startPythonProcess(
-                    scriptPath: "\(PythonEnv.pythonPackagesPath)/mempalace/mcp_server.py",
-                    arguments: ["--palace", self.palacePath],
-                    inputPipe: inputPipe,
-                    outputPipe: outputPipe,
-                    errorPipe: errorPipe
-                )
-                    
-                try await MCPHandler.shared.registerServer(serverName: "mempalace") {
-                    return transport
-                }
-            } catch {
-                print("MempalaceMCP init failed: \(error)")
-            }
-        }
-    }
-    
-    func mempalaceMCPExec(name: String, args: [String: Any]) async -> String {
-        do {
-            let content = try await MCPHandler.shared.callTool(
-                serverName: "mempalace",
-                toolName: name,
-                arguments: args
-            )
-            
-            return MCPHandler.shared.convToString(content)
-        } catch {
-            return "Mempalace \(name) failed: \(error)"
-        }
-    }
-     */
+    static let mempalacePath = DAWSON.root.appendingPathComponent(".mempalace")
+    static let palacePath = mempalacePath.appendingPathComponent("palace")
     
     func mempalaceExec(name: String, args: [String: Any]) -> String {
+        setenv("MEMPALACE_PALACE_PATH", MempalaceMemory.palacePath.path, 1)
+        
         let mcpPayload: [String: Any] = [
             "method": "tools/call",
             "id": UUID().uuidString,
@@ -85,6 +35,24 @@ class MempalaceMemory: @unchecked Sendable {
         } catch {
             return "Mempalace \(name) failed: \(error)"
         }
+    }
+    
+    func mineConversations(path: String) throws -> PythonProcess {
+        let args = [
+            "-m", "mempalace",
+            "--palace", MempalaceMemory.palacePath.path,
+            "mine",
+            path,
+            "--mode", "convos"
+        ]
+
+        return try PythonHandler.shared.startPythonProcess(
+            scriptPath: PythonEnv.pythonExecPath,
+            arguments: args,
+            inputPipe: Pipe(),
+            outputPipe: Pipe(),
+            errorPipe: Pipe()
+        )
     }
     
     func getStatus() -> String {

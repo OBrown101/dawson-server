@@ -13,9 +13,15 @@ class DAWSON: @unchecked Sendable {
     
     let server: WebSocketServer
 
+    #if DEBUG
     static let root = FileManager.default
         .homeDirectoryForCurrentUser
         .appendingPathComponent("DAWSON")
+    #else
+    static let root = URL(fileURLWithPath: CommandLine.arguments[0])
+        .resolvingSymlinksInPath()
+        .deletingLastPathComponent()
+    #endif
 
     static let databank = DAWSON.root
         .appendingPathComponent("databank")
@@ -26,6 +32,9 @@ class DAWSON: @unchecked Sendable {
     private var activeChats: [String: Chat] = [:]
 
     init() {
+        print("DAWSON root: \(DAWSON.root.path)")
+        print("DAWSON databank: \(DAWSON.databank.path))")
+        
         server = WebSocketServer()
         server.dawson = self
         
@@ -34,8 +43,8 @@ class DAWSON: @unchecked Sendable {
         print("Loaded Chats: \(savedChats)")
     }
     
-    func getAllChats() -> [Chat] {
-        return Array(activeChats.values)
+    func getAllChats(userUUID: String) -> [Chat] {
+        return Array(activeChats.values.filter({ $0.userUUID == userUUID }))
     }
     
     func getChat(_ uuid: String) -> Chat? {
@@ -120,9 +129,12 @@ extension DAWSON {
     
     func updateChat(_ chat: Chat) {
         activeChats[chat.uuid]?.title = chat.title
-        activeChats[chat.uuid]?.updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
+        activeChats[chat.uuid]?.updatedTimestamp = Date.now.epochMillis
+        activeChats[chat.uuid]?.saveMetadata()
         print("Chat (\(chat.uuid) updated.")
-        broadcastChatUpsert(chat)
+        if let updatedChat = activeChats[chat.uuid] {
+            broadcastChatUpsert(updatedChat)
+        }
     }
     
     func deleteChat(_ chatUUID: String) {
@@ -180,6 +192,8 @@ extension DAWSON {
               let payload = try? JSONDecoder().decode(AnyCodable.self, from: encoded) else { return }
         let configData = ConfigData(
             userUUID: agent.userUUID,
+            agentUUID: agent.uuid,
+            providerType: nil,
             dataType: .updateAgent,
             payload: payload
         )
@@ -192,6 +206,8 @@ extension DAWSON {
               let payload = try? JSONDecoder().decode(AnyCodable.self, from: encoded) else { return }
         let configData = ConfigData(
             userUUID: agent.userUUID,
+            agentUUID: agent.uuid,
+            providerType: nil,
             dataType: .deleteAgent,
             payload: payload
         )

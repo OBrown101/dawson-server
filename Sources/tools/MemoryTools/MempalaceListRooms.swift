@@ -12,6 +12,7 @@ class MempalaceListRooms: Tool {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": "List rooms within a wing (or all rooms if no wing given)",
             "parameters": [

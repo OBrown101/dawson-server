@@ -19,6 +19,7 @@ class ReadFile: PermissionAware {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": """
             Reads a file. Optionally reads only a specific line range and can prefix lines with line numbers. If file is long, DO NOT read the entire content, you should read only the specific line range of interest.

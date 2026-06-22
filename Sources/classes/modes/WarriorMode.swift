@@ -35,7 +35,7 @@ class WarriorMode: Mode {
         guard let path = request.target else {
             return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Missing \(request.action.rawValue) target path."))
         }
-        return PermissionEvaluation(request: request, decision: .requiresApproval(reason: "\(request.action.rawValue.capitalized) operation requires user approval: \(path)"))
+        return PermissionEvaluation(request: request, decision: .allowed)
     }
     
     static func getPermissionDescription(for action: ModeAction) -> String {
@@ -60,7 +60,7 @@ class WarriorMode: Mode {
                 throw ModePermissionError.forbidden
             case .read, .write:
                 guard let path = request.target else { break }
-                let inDirectories = Utility.inSessionDirectories(path: path, directories: agent.directories)
+                let inDirectories = FileUtilities.inSessionDirectories(path: path, directories: agent.directories)
                 guard (inDirectories) else { throw ModePermissionError.forbidden }
             case .command:
                 throw ModePermissionError.forbidden

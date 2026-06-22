@@ -105,8 +105,10 @@ class AgentUtilities {
             Rules:
             - Do not search outside these directories.
             - Do not read, write, patch, list, or reference files outside these directories.
-            - If the user asks about a file/project/folder without an absolute path, search only within these directories.
-            - If something cannot be found inside these directories, say that it is not available with the current session settings.
+            - If the user asks about a file, project, folder, workspace, repo, or similar, you MUST first utilize the neccessary tool to inquire inside these directories before answering.
+            - If the user provides only a filename, search these directories for it.
+            - Do not say you cannot access workspace files unless a workspace tool call actually fails.
+            - If something cannot be found inside these directories after searching, say that it is not available with the current session settings.
             - Treat this list as current for this run; it may change between runs.
             """
     }

@@ -39,7 +39,7 @@ struct MessageData: Codable, Equatable {
         return MessageData(
             uuid: message.uuid,
             runUUID: message.runUUID,
-            timestamp: Int64(message.createdAt.timeIntervalSince1970 * 1000),
+            timestamp: message.createdAt.epochMillis,
             chatUUID: chatUUID,
             sourceType: (message.role == MsgSource.user.name) ? .prompt : .response,
             sourceUUID: (message.role == MsgSource.user.name) ? userUUID : agentUUID,

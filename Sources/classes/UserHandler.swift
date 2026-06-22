@@ -23,6 +23,10 @@ class UserHandler: @unchecked Sendable {
         return activeUsers.values.map { $0 }
     }
     
+    func getUser(_ userUUID: String) -> User? {
+        return activeUsers[userUUID]
+    }
+    
     func upsertUser(_ user: User) {
         if (!activeUsers.keys.contains(user.uuid)) {
             createUser(user)
@@ -51,7 +55,7 @@ extension UserHandler {
     func updateUser(_ user: User) {
         activeUsers[user.uuid]?.name = user.name
         activeUsers[user.uuid]?.notes = user.notes
-        activeUsers[user.uuid]?.updatedTimestamp = Int64(Date.now.timeIntervalSince1970)
+        activeUsers[user.uuid]?.updatedTimestamp = Date.now.epochMillis
         activeUsers[user.uuid]?.saveMetadata()
     }
 }

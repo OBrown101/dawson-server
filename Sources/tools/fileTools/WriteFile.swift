@@ -20,6 +20,7 @@ class WriteFile: PermissionAware {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": """
             Writes content to a file at the specified path. Overwrites existing content if the file exists. Used for writing to any file.

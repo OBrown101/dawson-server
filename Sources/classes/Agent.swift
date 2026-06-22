@@ -7,6 +7,7 @@ enum AgentEvent {
     case toolCall(String = "")
     case toolResult(String = "")
     case userInputRequest(UserInputRequest)
+    case agentState(Agent.AgentState)
     
     var key: String {
         switch self {
@@ -15,12 +16,18 @@ enum AgentEvent {
         case .toolCall: return "toolCall"
         case .toolResult: return "toolResult"
         case .userInputRequest: return "userInputRequest"
+        case .agentState: return "agentState"
         }
     }
 }
 
 actor AgentRunner {
     private var running = false
+    
+    func start() throws {
+        if running { throw Agent.AgentError.agentRunning }
+        running = true
+    }
     
     func setRunning(_ running: Bool = true) {
         self.running = running
@@ -85,7 +92,7 @@ class Agent: Codable {
         contextWindow: Int32,
         useThinking: Bool = true,
         directories: [String] = [DAWSON.root.path],
-        updatedTimestamp: Int64 = Int64(Date.now.timeIntervalSince1970)
+        updatedTimestamp: Int64 = Date.now.epochMillis
     ) {
         self.uuid = uuid
         self.userUUID = userUUID
@@ -184,7 +191,8 @@ class Agent: Codable {
         // TODO: Recent-window trimming is brute-force, will need to change handling
         let systemMessages = messages.filter { $0.role == MsgSource.system.name }
         let nonSystemMessages = messages.filter { $0.role != MsgSource.system.name }
-        let trimmed = nonSystemMessages.suffix(thoughtWindow)
+        let window = (thoughtWindow > 0) ? thoughtWindow : nonSystemMessages.count
+        let trimmed = nonSystemMessages.suffix(window)
         return (systemMessages + trimmed)
     }
     
@@ -251,12 +259,10 @@ class Agent: Codable {
         systemPrompt: String = "",
         onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
     ) async throws -> [Message] {
-        if await (runner.isRunning()) { throw AgentError.agentRunning }
-        await runner.setRunning()
+        try await runner.start()
         
         // In case previously stuck in .awaitingInput, if calling runAgent() then suspend-state no longer valid
         self.suspendData = nil
-        self.state = .ready
         
         var newMessages: [Message] = []
 
@@ -291,11 +297,9 @@ class Agent: Codable {
         userResponse: UserInputResponse,
         onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
     ) async throws -> [Message] {
-        if await (runner.isRunning()) { throw AgentError.agentRunning }
-        await runner.setRunning()
+        try await runner.start()
         
         guard let suspendData = suspendData else {
-            await runner.setRunning(false)
             throw AgentError.notSuspended
         }
         
@@ -330,7 +334,6 @@ class Agent: Codable {
         // Tool permission/input handled and tool executed (or not)
         tcIndex += 1
         self.suspendData = nil
-        self.state = .ready
 
         let loopMessages = await runInternalLoop(
             runUUID: suspendData.runUUID,
@@ -364,6 +367,9 @@ class Agent: Codable {
         existingToolCallIndex: Int = 0,
         onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
     ) async -> [Message] {
+        onEvent?(.agentState(.processing), runUUID)
+        self.state = .processing
+        
         var newMessages = startMessages
         
         let trimmedHistory = trimMessages(history)
@@ -377,6 +383,11 @@ class Agent: Codable {
         while iterations < modeIterations {
             var toolResults: [Message] = []
             for index in pendingToolIndex..<pendingToolCalls.count {
+                if (self.state != .acting) {
+                    onEvent?(.agentState(.acting), runUUID)
+                    self.state = .acting
+                }
+                
                 let tc = pendingToolCalls[index]
 
                 print("Calling tool: \(tc.name)...")
@@ -399,11 +410,13 @@ class Agent: Codable {
                     onEvent?(.userInputRequest(request), runUUID)
                     if (!request.prompt.isEmpty) {
                         onEvent?(.content(request.prompt), runUUID)
-                        toolResults.append(Message(runUUID: runUUID, role: MsgSource.assistant.name, text: request.prompt))
+                        toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: request.prompt))
                     }
                     print("Tool result: permission -> \(request.prompt)")
                     newMessages.append(contentsOf: toolResults)
                     suspendSession(runUUID: runUUID, iterationIndex: iterations, messages: newMessages, userInputRequest: request, toolCalls: pendingToolCalls, toolCallIndex: index)
+                    
+                    onEvent?(.agentState(.awaitingInput), runUUID)
                     self.state = .awaitingInput
                     return newMessages
                 }
@@ -412,7 +425,12 @@ class Agent: Codable {
 
             var promptMessage = trimmedHistory
             if let workspacePrompt = AgentUtilities.getWorkspacesPrompt(mode: mode, directories) {
-                promptMessage.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: workspacePrompt))
+                let newMessage = Message(runUUID: runUUID, role: MsgSource.system.name, text: workspacePrompt)
+                if let firstNonSystemIndex = promptMessage.firstIndex(where: { $0.role != MsgSource.system.name }) {
+                    promptMessage.insert(newMessage, at: firstNonSystemIndex)
+                } else {
+                    promptMessage.append(newMessage)
+                }
             }
             promptMessage.append(contentsOf: newMessages)
             let response = await provider.send(
@@ -423,13 +441,35 @@ class Agent: Codable {
                 contextWindow: contextWindow,
                 onUpdate: { response in
                     if !response.thinking.isEmpty {
+                        if (self.state != .thinking) {
+                            onEvent?(.agentState(.thinking), runUUID)
+                            self.state = .thinking
+                        }
                         onEvent?(.thinking(response.thinking), runUUID)
                     }
                     if !response.content.isEmpty {
+                        if (self.state != .responding) {
+                            onEvent?(.agentState(.responding), runUUID)
+                            self.state = .responding
+                        }
                         onEvent?(.content(response.content), runUUID)
                     }
                 }
             )
+            
+            if let error = response.error {
+                let errorText = error.localizedDescription
+                onEvent?(.content(errorText), runUUID)
+
+                let errorMessage = Message(runUUID: runUUID, role: MsgSource.assistant.name, text: ("Encountered LLM provider error: " + errorText))
+                newMessages.append(errorMessage)
+                history.append(contentsOf: newMessages)
+                
+                onEvent?(.agentState(.error), runUUID)
+                self.state = .error
+                return newMessages
+            }
+            
             let responseMsg = Message.fromProvider(response, runUUID: runUUID)
             newMessages.append(responseMsg)
 
@@ -437,6 +477,9 @@ class Agent: Codable {
             guard let toolCalls = responseMsg.toolCalls,
                   (!toolCalls.isEmpty) else {
                 history.append(contentsOf: newMessages)
+                
+                onEvent?(.agentState(.ready), runUUID)
+                self.state = .ready
                 return newMessages
             }
 
@@ -444,6 +487,10 @@ class Agent: Codable {
             pendingToolIndex = 0
             iterations += 1
         }
+        
+        onEvent?(.agentState(.ready), runUUID)
+        self.state = .ready
+        
         return newMessages
     }
     
@@ -516,6 +563,11 @@ extension Agent {
     enum AgentState: String, Codable {
         case ready = "READY"
         case awaitingInput = "AWAITING_INPUT"
+        case processing = "PROCESSING"
+        case thinking = "THINKING"
+        case acting = "ACTING"
+        case responding = "RESPONDING"
+        case error = "ERROR"
     }
     
     enum AgentType: String, Codable {
@@ -597,7 +649,7 @@ extension Agent {
             agents.append(agent)
         }
 
-        return agents.sorted {($0.history.last?.createdAt.timeIntervalSince1970 ?? 0) > ($1.history.last?.createdAt.timeIntervalSince1970 ?? 0) }
+        return agents.sorted {($0.history.last?.createdAt.epochMillis ?? 0) > ($1.history.last?.createdAt.epochMillis ?? 0) }
     }
     
     static func loadAgent(agentUUID: String) -> Agent? {

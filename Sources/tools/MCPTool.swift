@@ -44,7 +44,7 @@ class MCPTool: PermissionAware {
 
                 Example:
                 {
-                    "executable_path": "/Users/ethan/DAWSON/server.py",
+                    "executable_path": "/Users/Jim/Dawson-Core/server.py",
                     "args": ["-m", "mempalace.mcp_server", "--palace", "/path/to/palace"]
                 }
                 """

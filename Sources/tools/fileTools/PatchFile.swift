@@ -22,6 +22,7 @@ class PatchFile: PermissionAware {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": "Applies a simple unified diff patch to a file. Supports a single hunk.",
             "parameters": [

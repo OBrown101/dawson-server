@@ -12,6 +12,7 @@ class MempalaceSearch: Tool {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": "Semantic search with wing/room filters",
             "parameters": [

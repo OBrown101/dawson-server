@@ -12,6 +12,7 @@ class MempalaceKgInvalidate: Tool {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": "Mark a fact as no longer true. E.g. ankle injury resolved, job ended, moved house.",
             "parameters": [

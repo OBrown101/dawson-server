@@ -29,11 +29,14 @@ final class OpenAIProvider: LLMProvider {
             "stream": true
         ]
         
+        // REMOVED THINKING FOR NOW, NEED HANDLING/TESTING LATER
+        /*
         if (useThinking) {
             payload["reasoning"] = [
                 "effort": "medium"
             ]
         }
+         */
 
         if !tools.isEmpty {
             payload["tools"] = tools.map { $0.openAISchema() }
@@ -90,10 +93,18 @@ final class OpenAIProvider: LLMProvider {
                     }
 
                 case "response.failed":
+                    let completedResponse = json["response"] as? [String: Any]
+                    let errorInfo = completedResponse?["error"] as? [String: Any]
+
+                    let code = errorInfo?["code"] as? String ?? "unknown_error"
+                    let message = errorInfo?["message"] as? String ?? "\(json)"
+
                     response.error = NSError(
                         domain: "OpenAIProvider",
                         code: -1,
-                        userInfo: [NSLocalizedDescriptionKey: "\(json)"]
+                        userInfo: [
+                            NSLocalizedDescriptionKey: "\(code): \(message)"
+                        ]
                     )
 
                 default:

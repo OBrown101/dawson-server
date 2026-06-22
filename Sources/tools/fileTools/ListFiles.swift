@@ -21,6 +21,7 @@ class ListFiles: PermissionAware {
     
     func openAISchema() -> [String : Any] {
         return [
+            "type": "function",
             "name": name,
             "description": "Recursively lists files and directories under the specified path. Returns relative paths for token efficiency.",
             "parameters": [

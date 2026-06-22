@@ -18,24 +18,36 @@ final class AnthropicProvider: LLMProvider {
     ) async -> ProviderResponse {
         var response = ProviderResponse(createdAt: "", model: model.name, content: "")
 
+        let systemPrompt = messages
+            .filter { $0.role == MsgSource.system.name }
+            .compactMap { $0.text }
+            .joined(separator: "\n\n")
+        
         var payload: [String: Any] = [
-            "model": model.name,
+            "model": model.id,
             "max_tokens": 4096,
             "messages": messages.map {
                 [
-                    "role": $0.role == "assistant" ? "assistant" : "user",
+                    "role": $0.role,
                     "content": $0.text
                 ]
             },
             "stream": true
         ]
         
+        if (!systemPrompt.isEmpty) {
+            payload["system"] = systemPrompt
+        }
+        
+        // REMOVED THINKING FOR NOW, NEED HANDLING/TESTING LATER
+        /*
         if (useThinking) {
             payload["thinking"] = [
                 "type": "enabled",
                 "budget_tokens": 2048
             ]
         }
+         */
 
         if !tools.isEmpty {
             payload["tools"] = tools.map { $0.anthropicSchema() }
