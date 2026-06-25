@@ -14,7 +14,7 @@ final class OllamaProvider: LLMProvider {
         tools: [Tool],
         useThinking: Bool,
         contextWindow: Int32,
-        onUpdate: @escaping (ProviderResponse) -> Void
+        onUpdate: @Sendable @escaping (ProviderResponse) async -> Void
     ) async -> ProviderResponse {
         var response = ProviderResponse(createdAt: "", model: model.name, content: "")
         
@@ -36,9 +36,12 @@ final class OllamaProvider: LLMProvider {
         }
         
         do {
+            try Task.checkCancellation()
             let stream = ProviderClient.shared.streamJSON(llmType: .ollama, payload: payload)
             
             for try await jsonData in stream {
+                try Task.checkCancellation()
+                
                 guard let json = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else { return response }
                 
                 var chunkResponse = ProviderResponse(createdAt: "", model: "", content: "")
@@ -71,8 +74,10 @@ final class OllamaProvider: LLMProvider {
                         response.content += c
                     }
                     
+                    if Task.isCancelled { throw CancellationError() }
+                    
                     if (content != nil || thinking != nil) {
-                        onUpdate(chunkResponse)
+                        await onUpdate(chunkResponse)
                     }
                 }
             }

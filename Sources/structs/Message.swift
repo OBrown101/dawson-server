@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct Message: Codable {
+struct Message: Codable, Sendable {
     let uuid: String
     let runUUID: String
     let createdAt: Date
@@ -34,6 +34,6 @@ struct Message: Codable {
             model: providerResponse.model,
             role: MsgSource.assistant.name,
             text: providerResponse.content,
-            toolCalls: ToolCall.fromOllamaToolJSON(providerResponse.toolCalls))
+            toolCalls: ToolCall.fromProviderToolJSON(providerResponse.toolCalls))
     }
 }

@@ -39,7 +39,7 @@ actor AgentRunner {
 }
 
 
-class Agent: Codable {
+class Agent: Codable, @unchecked Sendable {
     let uuid: String
     let userUUID: String
     let type: AgentType
@@ -169,6 +169,11 @@ class Agent: Codable {
         return summary
     }
     
+    func setModel(_ model: LLMModel) {
+        self.model = model
+        provider = Provider.provider(for: model.provider)
+    }
+    
     private func suspendSession(
         runUUID: String,
         iterationIndex: Int,
@@ -257,106 +262,118 @@ class Agent: Codable {
         runUUID: String,
         userPrompt: String,
         systemPrompt: String = "",
-        onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
+        onEvent: @escaping (@Sendable (_ event: AgentEvent, _ runUUID: String) async -> Void)
     ) async throws -> [Message] {
         try await runner.start()
         
-        // In case previously stuck in .awaitingInput, if calling runAgent() then suspend-state no longer valid
-        self.suspendData = nil
-        
-        var newMessages: [Message] = []
-
-        if (!systemPrompt.isEmpty) {
-            newMessages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: systemPrompt))
-        }
-
-        newMessages.append(Message(runUUID: runUUID, role: MsgSource.user.name, text: userPrompt))
-
-        let loopMessages = await runInternalLoop(
-            runUUID: runUUID,
-            startMessages: newMessages,
-            onEvent: onEvent
-        )
-        
-        if (self.state != .awaitingInput) {
-            await runMemorySessionSummarizer(
+        do {
+            // In case previously stuck in .awaitingInput, if calling runAgent() then suspend-state no longer valid
+            self.suspendData = nil
+            
+            var newMessages: [Message] = []
+            
+            if (!systemPrompt.isEmpty) {
+                newMessages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: systemPrompt))
+            }
+            
+            newMessages.append(Message(runUUID: runUUID, role: MsgSource.user.name, text: userPrompt))
+            
+            let loopMessages = try await runInternalLoop(
                 runUUID: runUUID,
-                messages: loopMessages,
+                startMessages: newMessages,
                 onEvent: onEvent
             )
-            await setSummary(history)
+            
+            if (self.state != .awaitingInput) {
+                try Task.checkCancellation()
+                
+                await runMemorySessionSummarizer(
+                    runUUID: runUUID,
+                    messages: loopMessages,
+                    onEvent: onEvent
+                )
+                await setSummary(history)
+            }
+            
+            saveMessagesToHistory(loopMessages, agentUUID: uuid)
+            saveMetadata()
+            await runner.setRunning(false)
+            return loopMessages
+        } catch {
+            await runner.setRunning(false)
+            throw error
         }
-        
-        saveMessagesToHistory(loopMessages, agentUUID: uuid)
-        saveMetadata()
-        await runner.setRunning(false)
-        return loopMessages
     }
     
     func resumeAgent(
         userResponse: UserInputResponse,
-        onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
+        onEvent: @escaping (@Sendable (_ event: AgentEvent, _ runUUID: String) async -> Void)
     ) async throws -> [Message] {
         try await runner.start()
         
-        guard let suspendData = suspendData else {
-            throw AgentError.notSuspended
-        }
-        
-
-        let runUUID = suspendData.runUUID
-        let request = suspendData.userInputRequest
-        var messages = suspendData.messages
-        let toolCalls = suspendData.toolCalls
-        var tcIndex = suspendData.toolCallIndex
-        
-        switch request.type {
-        case .permission:
-            if let accepted = userResponse.accepted,
-               (accepted) {
-                if (toolCalls.indices.contains(tcIndex)) {
-                    // Need to execute original tool that requested permission (to prevent re-triggering request)
-                    let tc = toolCalls[tcIndex]
-                    let toolOutput = await executeTool(tc)
+        do {
+            guard let suspendData = suspendData else {
+                throw AgentError.notSuspended
+            }
+            
+            
+            let runUUID = suspendData.runUUID
+            let request = suspendData.userInputRequest
+            var messages = suspendData.messages
+            let toolCalls = suspendData.toolCalls
+            var tcIndex = suspendData.toolCallIndex
+            
+            switch request.type {
+            case .permission:
+                if let accepted = userResponse.accepted,
+                   (accepted) {
+                    if (toolCalls.indices.contains(tcIndex)) {
+                        // Need to execute original tool that requested permission (to prevent re-triggering request)
+                        let tc = toolCalls[tcIndex]
+                        let toolOutput = await executeTool(tc)
+                        messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
+                        messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: toolOutput))
+                    }
+                } else {
                     messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
-                    messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: toolOutput))
                 }
-            } else {
+            case .confirmation:
+                // Currently just inputs back into LLM, in future can be used for specific, binary requirements (not just approve/deny)
+                messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
+            case .input:
                 messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
             }
-        case .confirmation:
-            // Currently just inputs back into LLM, in future can be used for specific, binary requirements (not just approve/deny)
-            messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
-        case .input:
-            messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
-        }
-        
-        // Tool permission/input handled and tool executed (or not)
-        tcIndex += 1
-        self.suspendData = nil
-
-        let loopMessages = await runInternalLoop(
-            runUUID: suspendData.runUUID,
-            iterationIndex: suspendData.iterationIndex,
-            startMessages: messages,
-            existingToolCalls: toolCalls,
-            existingToolCallIndex: tcIndex,
-            onEvent: onEvent
-        )
-        
-        if (self.state != .awaitingInput) {
-            await runMemorySessionSummarizer(
-                runUUID: runUUID,
-                messages: loopMessages,
+            
+            // Tool permission/input handled and tool executed (or not)
+            tcIndex += 1
+            self.suspendData = nil
+            
+            let loopMessages = try await runInternalLoop(
+                runUUID: suspendData.runUUID,
+                iterationIndex: suspendData.iterationIndex,
+                startMessages: messages,
+                existingToolCalls: toolCalls,
+                existingToolCallIndex: tcIndex,
                 onEvent: onEvent
             )
-            await setSummary(history)
-        }
             
-        saveMessagesToHistory(loopMessages, agentUUID: self.uuid)
-        saveMetadata()
-        await runner.setRunning(false)
-        return loopMessages
+            if (self.state != .awaitingInput) {
+                await runMemorySessionSummarizer(
+                    runUUID: runUUID,
+                    messages: loopMessages,
+                    onEvent: onEvent
+                )
+                await setSummary(history)
+            }
+            
+            saveMessagesToHistory(loopMessages, agentUUID: self.uuid)
+            saveMetadata()
+            await runner.setRunning(false)
+            return loopMessages
+        } catch {
+            await runner.setRunning(false)
+            throw error
+        }
     }
     
     private func runInternalLoop(
@@ -365,9 +382,9 @@ class Agent: Codable {
         startMessages: [Message],
         existingToolCalls: [ToolCall] = [],
         existingToolCallIndex: Int = 0,
-        onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
-    ) async -> [Message] {
-        onEvent?(.agentState(.processing), runUUID)
+        onEvent: @escaping (@Sendable (_ event: AgentEvent, _ runUUID: String) async -> Void)
+    ) async throws -> [Message] {
+        await onEvent(.agentState(.processing), runUUID)
         self.state = .processing
         
         var newMessages = startMessages
@@ -381,42 +398,47 @@ class Agent: Codable {
         var pendingToolIndex = existingToolCallIndex
         
         while iterations < modeIterations {
+            try Task.checkCancellation()
+            
             var toolResults: [Message] = []
             for index in pendingToolIndex..<pendingToolCalls.count {
                 if (self.state != .acting) {
-                    onEvent?(.agentState(.acting), runUUID)
+                    await onEvent(.agentState(.acting), runUUID)
                     self.state = .acting
                 }
                 
                 let tc = pendingToolCalls[index]
 
                 print("Calling tool: \(tc.name)...")
-                onEvent?(.toolCall(tc.name), runUUID)
+                await onEvent(.toolCall(tc.name), runUUID)
                 toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "CALLING TOOL: '\(tc.name)'"))
+                
+                try Task.checkCancellation()
                 let result = await runTool(tc)
+                try Task.checkCancellation()
 
                 switch result {
                 case .completed(let output):
-                    onEvent?(.toolResult(output), runUUID)
+                    await onEvent(.toolResult(output), runUUID)
                     toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: output))
                     print("Tool result: completed.")
 
                 case .denied(let reason):
-                    onEvent?(.toolResult(reason), runUUID)
+                    await onEvent(.toolResult(reason), runUUID)
                     toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: reason))
                     print("Tool result: denied -> \(reason)")
 
                 case .suspended(let request):
-                    onEvent?(.userInputRequest(request), runUUID)
+                    await onEvent(.userInputRequest(request), runUUID)
                     if (!request.prompt.isEmpty) {
-                        onEvent?(.content(request.prompt), runUUID)
+                        await onEvent(.content(request.prompt), runUUID)
                         toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: request.prompt))
                     }
                     print("Tool result: permission -> \(request.prompt)")
                     newMessages.append(contentsOf: toolResults)
                     suspendSession(runUUID: runUUID, iterationIndex: iterations, messages: newMessages, userInputRequest: request, toolCalls: pendingToolCalls, toolCallIndex: index)
                     
-                    onEvent?(.agentState(.awaitingInput), runUUID)
+                    await onEvent(.agentState(.awaitingInput), runUUID)
                     self.state = .awaitingInput
                     return newMessages
                 }
@@ -433,6 +455,8 @@ class Agent: Codable {
                 }
             }
             promptMessage.append(contentsOf: newMessages)
+            
+            try Task.checkCancellation()
             let response = await provider.send(
                 messages: promptMessage,
                 model: model,
@@ -440,32 +464,34 @@ class Agent: Codable {
                 useThinking: useThinking,
                 contextWindow: contextWindow,
                 onUpdate: { response in
+                    guard (!Task.isCancelled) else { return }
+                    
                     if !response.thinking.isEmpty {
                         if (self.state != .thinking) {
-                            onEvent?(.agentState(.thinking), runUUID)
+                            await onEvent(.agentState(.thinking), runUUID)
                             self.state = .thinking
                         }
-                        onEvent?(.thinking(response.thinking), runUUID)
+                        await onEvent(.thinking(response.thinking), runUUID)
                     }
                     if !response.content.isEmpty {
                         if (self.state != .responding) {
-                            onEvent?(.agentState(.responding), runUUID)
+                            await onEvent(.agentState(.responding), runUUID)
                             self.state = .responding
                         }
-                        onEvent?(.content(response.content), runUUID)
+                        await onEvent(.content(response.content), runUUID)
                     }
                 }
             )
             
             if let error = response.error {
                 let errorText = error.localizedDescription
-                onEvent?(.content(errorText), runUUID)
+                await onEvent(.content(errorText), runUUID)
 
                 let errorMessage = Message(runUUID: runUUID, role: MsgSource.assistant.name, text: ("Encountered LLM provider error: " + errorText))
                 newMessages.append(errorMessage)
                 history.append(contentsOf: newMessages)
                 
-                onEvent?(.agentState(.error), runUUID)
+                await onEvent(.agentState(.error), runUUID)
                 self.state = .error
                 return newMessages
             }
@@ -478,7 +504,7 @@ class Agent: Codable {
                   (!toolCalls.isEmpty) else {
                 history.append(contentsOf: newMessages)
                 
-                onEvent?(.agentState(.ready), runUUID)
+                await onEvent(.agentState(.ready), runUUID)
                 self.state = .ready
                 return newMessages
             }
@@ -488,7 +514,7 @@ class Agent: Codable {
             iterations += 1
         }
         
-        onEvent?(.agentState(.ready), runUUID)
+        await onEvent(.agentState(.ready), runUUID)
         self.state = .ready
         
         return newMessages
@@ -497,7 +523,7 @@ class Agent: Codable {
     private func runMemorySessionSummarizer(
         runUUID: String,
         messages: [Message],
-        onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil
+        onEvent: (@Sendable (_ event: AgentEvent, _ runUUID: String) async -> Void)
     ) async {
         var summarizerMessages = messages
         summarizerMessages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: AgentUtilities.memorySessionPrompt))
@@ -518,12 +544,12 @@ class Agent: Codable {
         }
 
         for tc in toolCalls {
-            onEvent?(.toolCall(tc.name), runUUID)
+            await onEvent(.toolCall(tc.name), runUUID)
 
             guard let tool = Agent.memoryTools.first(where: { $0.name == tc.name }) else { continue }
 
             let output = await tool.execute(args: tc.argDict)
-            onEvent?(.toolResult(output), runUUID)
+            await onEvent(.toolResult(output), runUUID)
 
             summarizerMessages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: output))
         }

@@ -14,7 +14,7 @@ final class AnthropicProvider: LLMProvider {
         tools: [Tool],
         useThinking: Bool,
         contextWindow: Int32,
-        onUpdate: @escaping (ProviderResponse) -> Void
+        onUpdate: @Sendable @escaping (ProviderResponse) async -> Void
     ) async -> ProviderResponse {
         var response = ProviderResponse(createdAt: "", model: model.name, content: "")
 
@@ -26,12 +26,7 @@ final class AnthropicProvider: LLMProvider {
         var payload: [String: Any] = [
             "model": model.id,
             "max_tokens": 4096,
-            "messages": messages.map {
-                [
-                    "role": $0.role,
-                    "content": $0.text
-                ]
-            },
+            "messages": toAnthropicMessages(messages),
             "stream": true
         ]
         
@@ -57,6 +52,7 @@ final class AnthropicProvider: LLMProvider {
         }
 
         do {
+            try Task.checkCancellation()
             let stream = ProviderClient.shared.streamJSON(
                 llmType: .anthropic,
                 payload: payload
@@ -66,6 +62,7 @@ final class AnthropicProvider: LLMProvider {
             var currentToolInput = ""
 
             for try await jsonData in stream {
+                try Task.checkCancellation()
                 guard let json = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
                       let type = json["type"] as? String else {
                     continue
@@ -98,7 +95,7 @@ final class AnthropicProvider: LLMProvider {
                        let text = delta["text"] as? String {
                         chunkResponse.content = text
                         response.content += text
-                        onUpdate(chunkResponse)
+                        await onUpdate(chunkResponse)
                     }
 
                     if deltaType == "input_json_delta",
@@ -153,5 +150,31 @@ final class AnthropicProvider: LLMProvider {
             return LLMModel(id: id, name: name, provider: .anthropic)
         }
         return llmModels
+    }
+}
+
+extension AnthropicProvider {
+    private func toAnthropicMessages(_ messages: [Message]) -> [[String: Any]] {
+        messages
+            .filter { $0.role != MsgSource.system.name }
+            .map { message in
+                if (message.role == MsgSource.tool.name) {
+                    return [
+                        "role": MsgSource.user.name,
+                        "content": [
+                            [
+                                "type": "tool_result",
+                                "tool_use_id": message.uuid,    // TODO: This needs to be a tool call id that is unique to each tool call
+                                "content": message.text ?? ""
+                            ]
+                        ]
+                    ]
+                }
+
+                return [
+                    "role": (message.role == MsgSource.assistant.name) ? "assistant" : "user",
+                    "content": message.text ?? ""
+                ]
+            }
     }
 }

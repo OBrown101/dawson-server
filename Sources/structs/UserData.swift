@@ -6,9 +6,9 @@
 //
 
 import Foundation
-import AnyCodable
+@preconcurrency import AnyCodable
 
-struct UserData: Codable {
+struct UserData: Codable, Sendable {
     let dataUUID: String
     let chatUUID: String
     let agentUUID: String

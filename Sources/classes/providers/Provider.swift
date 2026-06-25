@@ -26,7 +26,7 @@ protocol LLMProvider {
         tools: [Tool],
         useThinking: Bool,
         contextWindow: Int32,
-        onUpdate: @escaping (ProviderResponse) -> Void
+        onUpdate: @Sendable @escaping (ProviderResponse) async -> Void
     ) async -> ProviderResponse
 }
 

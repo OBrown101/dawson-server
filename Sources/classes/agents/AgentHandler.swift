@@ -23,7 +23,7 @@ class AgentHandler: @unchecked Sendable {
     
     func updateAgent(agent: Agent) {
         activeAgents[agent.uuid]?.mode = agent.mode
-        activeAgents[agent.uuid]?.model = agent.model
+        activeAgents[agent.uuid]?.setModel(agent.model)
         activeAgents[agent.uuid]?.thoughtWindow = agent.thoughtWindow
         activeAgents[agent.uuid]?.contextWindow = agent.contextWindow
         activeAgents[agent.uuid]?.useThinking = agent.useThinking
@@ -37,12 +37,16 @@ class AgentHandler: @unchecked Sendable {
     }
     
     func deleteAgent(_ agentUUID: String) {
-        let deletedAgent = activeAgents[agentUUID]
-        activeAgents[agentUUID]?.deleteAll()
-        activeAgents.removeValue(forKey: agentUUID)
-        print("Agent (\(agentUUID) deleted.")
-        if let agent = deletedAgent {
-            DAWSON.shared.broadcastAgentDelete(agent)
+        Task {
+            await AgentRunRegistry.shared.cancelAgentRun(agentUUID: agentUUID)
+            
+            let deletedAgent = activeAgents[agentUUID]
+            activeAgents[agentUUID]?.deleteAll()
+            activeAgents.removeValue(forKey: agentUUID)
+            print("Agent (\(agentUUID) deleted.")
+            if let agent = deletedAgent {
+                DAWSON.shared.broadcastAgentDelete(agent)
+            }
         }
     }
     
@@ -91,30 +95,73 @@ class AgentHandler: @unchecked Sendable {
         }
     }
     
-    func runAgent(runUUID: String, userUUID: String, agentUUID: String, prompt: String, onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil) async -> [Message] {
+    func runAgent(runUUID: String, userUUID: String, agentUUID: String, prompt: String, onEvent: @escaping (@Sendable (_ event: AgentEvent, _ runUUID: String) async -> Void)) async -> [Message] {
         guard let agent = activeAgents[agentUUID] else { return [] }
         
         let systemPrompt = (agent.getHistory().isEmpty) ? Loader.shared.buildBaseSystemPrompt(agent: agent.type) : ""
         
-        do {
+        let task = Task<[Message], Error> {
+            try Task.checkCancellation()
+
             return try await agent.runAgent(runUUID: runUUID, userPrompt: prompt, systemPrompt: systemPrompt, onEvent: onEvent)
+        }
+        await AgentRunRegistry.shared.register(runUUID: runUUID, agentUUID: agentUUID, task: task)
+        
+        defer {
+            Task {
+                await AgentRunRegistry.shared.remove(runUUID: runUUID)
+            }
+        }
+        
+        do {
+            return try await task.value
+        } catch is CancellationError {
+            return []
         } catch {
-            print(error.localizedDescription)
+            print("Agent run failed: \(error)")
             return []
         }
     }
     
-    func resumeAgent(response: UserInputResponse, onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil) async -> [Message] {
-        guard let agent = activeAgents[response.agentUUID] else {
+    func resumeAgent(response: UserInputResponse, onEvent: @escaping (@Sendable (_ event: AgentEvent, _ runUUID: String) async -> Void)) async -> [Message] {
+        guard let agent = activeAgents[response.agentUUID],
+              let runUUID = agent.suspendData?.runUUID else {
             print("Missing suspend data or agent")
             return []
         }
+        
+        let task = Task<[Message], Error> {
+            try Task.checkCancellation()
+            return try await agent.resumeAgent(userResponse: response, onEvent: onEvent)
+        }
+
+        await AgentRunRegistry.shared.register(
+            runUUID: runUUID,
+            agentUUID: response.agentUUID,
+            task: task
+        )
+
+        defer {
+            Task {
+                await AgentRunRegistry.shared.remove(runUUID: runUUID)
+            }
+        }
 
         do {
-            return try await agent.resumeAgent(userResponse: response, onEvent: onEvent)
+            return try await task.value
+        } catch is CancellationError {
+            return []
         } catch {
-            print(error.localizedDescription)
+            print("Resume agent failed: \(error)")
             return []
         }
+    }
+    
+    func cancelRun(_ runUUID: String) async {
+        await AgentRunRegistry.shared.cancel(runUUID: runUUID)
+    }
+
+    func cancelAgentRun(_ agentUUID: String) async {
+        await AgentRunRegistry.shared.cancelAgentRun(agentUUID: agentUUID)
     }
 }

@@ -96,13 +96,24 @@ final class ProviderClient: Sendable {
                     let session = URLSession(configuration: sessionConfig)
                     
                     let (bytes, response) = try await session.bytes(for: request)
-                    
+
                     if let httpResponse = response as? HTTPURLResponse,
                        !(200...299).contains(httpResponse.statusCode) {
-                        throw getHTTPError(domain: "LLMClient", response: httpResponse)
+
+                        var body = ""
+                        for try await line in bytes.lines {
+                            if !body.isEmpty {
+                                body += "\n"
+                            }
+                            body += line
+                        }
+
+                        throw getHTTPError(domain: "LLMClient", response: httpResponse, body: body)
                     }
                     
                     for try await line in bytes.lines {
+                        try Task.checkCancellation()
+                        
                         if ((llmType == .openai) || (llmType == .anthropic)) {
                             guard line.hasPrefix("data: ") else { continue }
 
