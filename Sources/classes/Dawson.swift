@@ -63,11 +63,11 @@ class DAWSON: @unchecked Sendable {
         return activeChats[chatUUID]?.messages ?? []
     }
     
-    func getChatResponse(chatUUID: String, runUUID: String, prompt: String, onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil) async {
+    func getChatResponse(chatUUID: String, runUUID: String, prompt: String, onEvent: @escaping (@Sendable (_ event: AgentEvent, _ runUUID: String) async -> Void)) async {
         await activeChats[chatUUID]?.getResponse(runUUID: runUUID, prompt: prompt, onEvent: onEvent)
     }
     
-    func getChatResumedResponse(response: UserInputResponse, onEvent: ((_ event: AgentEvent, _ runUUID: String) -> Void)? = nil) async {
+    func getChatResumedResponse(response: UserInputResponse, onEvent: @escaping (@Sendable (_ event: AgentEvent, _ runUUID: String) async -> Void)) async {
         guard let chatUUID = activeChats.values.first(where: { ($0.userUUID == response.userUUID) && ($0.agentUUID == response.agentUUID) })?.uuid else { return }
         await activeChats[chatUUID]?.getResumedResponse(response: response, onEvent: onEvent)
     }

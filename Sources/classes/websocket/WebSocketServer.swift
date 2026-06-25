@@ -159,15 +159,14 @@ extension WebSocketServer {
             deliveredUserData.payload = AnyCodable("")
             let response = WSPacket(type: .userData, payload: AnyCodable(deliveredUserData))
             sendTask(response, ws: ws)
-                
-            var dataIndex: [String: Int32] = [:]
-            var currentRunUUID: String? = nil
+            
+            let streamState = AgentEventStreamState()
             await dawson.getChatResponse(chatUUID: userData.chatUUID, runUUID: userData.dataUUID, prompt: textPrompt,
                 onEvent: { event, runUUID in
                     var dataType: AgentData.DataType
                     var payload: AnyCodable
-                    let index = (dataIndex[event.key] ?? 0)
-                    currentRunUUID = runUUID
+                    let index = await streamState.getIndex(for: event.key)
+                    await streamState.setCurrentRunUUID(runUUID)
                     
                     switch event {
                     case .agentState(let state):
@@ -193,7 +192,7 @@ extension WebSocketServer {
                     case .userInputRequest(let prompt):
                         dataType = .userInputRequest
                         payload = AnyCodable(prompt)
-                        currentRunUUID = nil    // Input-request stops run-loop (to be resumed), can't permit sending "final message" index
+                        await streamState.setCurrentRunUUID(nil)    // Input-request stops run-loop (to be resumed), can't permit sending "final message" index
                     }
                 
                     let agentData = AgentData(
@@ -205,14 +204,19 @@ extension WebSocketServer {
                         payload: payload
                     )
                     let response = WSPacket(type: .agentData, payload: AnyCodable(agentData))
-                    dataIndex[event.key] = (index + 1)
+                    await streamState.incrIndex(for: event.key)
                     self.sendTask(response, ws: ws)
                 }
             )
             
-            if let currentRunUUID = currentRunUUID {
-                let lastDataIndex: Int32 = (dataIndex[AgentEvent.content().key] ?? 1) - 1
-                sendAgentDataCompleted(runUUID: currentRunUUID, lastDataIndex: lastDataIndex, userUUID: userData.userUUID, agentUUID: userData.agentUUID, ws: ws)
+            if let finalState = await streamState.finalState() {
+                sendAgentDataCompleted(
+                    runUUID: finalState.runUUID,
+                    lastDataIndex: finalState.lastDataIndex,
+                    userUUID: userData.userUUID,
+                    agentUUID: userData.agentUUID,
+                    ws: ws
+                )
             }
         case .dataPrompt:
             break
@@ -223,13 +227,13 @@ extension WebSocketServer {
         guard let dawson = dawson else { return }
         var dataIndex: [String: Int32] = [:]
 
-        var currentRunUUID: String? = nil
+        let streamState = AgentEventStreamState()
         await dawson.getChatResumedResponse(response: response,
             onEvent: { event, runUUID in
                 var dataType: AgentData.DataType
                 var payload: AnyCodable
-                let index = (dataIndex[event.key] ?? 0)
-                currentRunUUID = runUUID
+                let index = await streamState.getIndex(for: event.key)
+                await streamState.setCurrentRunUUID(runUUID)
 
                 switch event {
                 case .agentState(let state):
@@ -255,7 +259,7 @@ extension WebSocketServer {
                 case .userInputRequest(let request):
                     dataType = .userInputRequest
                     payload = AnyCodable(request)
-                    currentRunUUID = nil    // Input-request stops run-loop (to be resumed), can't permit sending "final message" index
+                    await streamState.setCurrentRunUUID(nil)    // Input-request stops run-loop (to be resumed), can't permit sending "final message" index
                 }
 
                 let agentData = AgentData(
@@ -268,15 +272,19 @@ extension WebSocketServer {
                 )
 
                 let response = WSPacket(type: .agentData, payload: AnyCodable(agentData))
-                dataIndex[event.key] = (index + 1)
-                
+                await streamState.incrIndex(for: event.key)
                 self.sendTask(response, ws: ws)
             }
         )
         
-        if let currentRunUUID = currentRunUUID {
-            let lastDataIndex: Int32 = (dataIndex[AgentEvent.content().key] ?? 1) - 1
-            sendAgentDataCompleted(runUUID: currentRunUUID, lastDataIndex: lastDataIndex, userUUID: response.userUUID, agentUUID: response.agentUUID, ws: ws)
+        if let finalState = await streamState.finalState() {
+            sendAgentDataCompleted(
+                runUUID: finalState.runUUID,
+                lastDataIndex: finalState.lastDataIndex,
+                userUUID: response.userUUID,
+                agentUUID: response.agentUUID,
+                ws: ws
+            )
         }
     }
     

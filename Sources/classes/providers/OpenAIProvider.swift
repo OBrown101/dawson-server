@@ -14,7 +14,7 @@ final class OpenAIProvider: LLMProvider {
         tools: [Tool],
         useThinking: Bool,
         contextWindow: Int32,
-        onUpdate: @escaping (ProviderResponse) -> Void
+        onUpdate: @Sendable @escaping (ProviderResponse) async -> Void
     ) async -> ProviderResponse {
         var response = ProviderResponse(createdAt: "", model: model.name, content: "")
 
@@ -44,12 +44,14 @@ final class OpenAIProvider: LLMProvider {
         }
 
         do {
+            try Task.checkCancellation()
             let stream = ProviderClient.shared.streamJSON(
                 llmType: .openai,
                 payload: payload
             )
 
             for try await jsonData in stream {
+                try Task.checkCancellation()
                 guard let json = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
                       let type = json["type"] as? String else {
                     continue
@@ -62,27 +64,14 @@ final class OpenAIProvider: LLMProvider {
                     if let delta = json["delta"] as? String {
                         chunkResponse.content = delta
                         response.content += delta
-                        onUpdate(chunkResponse)
+                        await onUpdate(chunkResponse)
                     }
 
                 case "response.output_item.done":
                     if let item = json["item"] as? [String: Any],
-                       let itemType = item["type"] as? String {
-
-                        if itemType == "function_call" {
-                            response.toolCalls.append(item)
-                        }
-
-                        if itemType == "message",
-                           let content = item["content"] as? [[String: Any]] {
-                            for part in content {
-                                if let text = part["text"] as? String {
-                                    chunkResponse.content = text
-                                    response.content += text
-                                    onUpdate(chunkResponse)
-                                }
-                            }
-                        }
+                       let itemType = item["type"] as? String,
+                       itemType == "function_call" {
+                        response.toolCalls.append(item)
                     }
 
                 case "response.completed":

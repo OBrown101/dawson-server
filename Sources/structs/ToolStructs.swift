@@ -6,9 +6,9 @@
 //
 
 import Foundation
-import AnyCodable
+@preconcurrency import AnyCodable
 
-struct ToolCall: Codable {
+struct ToolCall: Codable, Sendable {
     let name: String
     let arguments: [String: AnyCodable]
     
@@ -17,26 +17,38 @@ struct ToolCall: Codable {
         case arguments
     }
     
-    static func fromOllamaToolJSON(_ json: [[String: Any]]?) -> [ToolCall]? {
-        guard let json = json else { return nil }
-        
+    static func fromProviderToolJSON(_ json: [[String: Any]]?) -> [ToolCall]? {
+        guard let json else { return nil }
+
         var toolCalls: [ToolCall] = []
         for callDict in json {
-            guard let function = callDict["function"] as? [String: Any] else {
-                print("Missing 'function' key in tool call")
+            var name: String?
+            var arguments: [String: Any] = [:]
+
+            if let function = callDict["function"] as? [String: Any] {
+                name = function["name"] as? String
+                arguments = function["arguments"] as? [String: Any] ?? [:]
+            } else {
+                name = callDict["name"] as? String
+
+                if let input = callDict["input"] as? [String: Any] {
+                    arguments = input
+                } else if let args = callDict["arguments"] as? [String: Any] {
+                    arguments = args
+                } else if let args = callDict["arguments"] as? String,
+                          let data = args.data(using: .utf8),
+                          let decoded = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    arguments = decoded
+                }
+            }
+
+            guard let name,
+                  !name.isEmpty else {
+                print("Missing tool call name:", callDict)
                 continue
             }
 
-            guard let name = function["name"] as? String else {
-                print("Missing 'name' in function")
-                continue
-            }
-
-            let arguments = function["arguments"] as? [String: Any] ?? [:]
-            let anyCodableArgs = arguments.mapValues { AnyCodable($0) }
-
-            let toolCall = ToolCall(name: name, arguments: anyCodableArgs)
-            toolCalls.append(toolCall)
+            toolCalls.append(ToolCall(name: name, arguments: arguments.mapValues { AnyCodable($0) }))
         }
 
         return toolCalls.isEmpty ? nil : toolCalls
