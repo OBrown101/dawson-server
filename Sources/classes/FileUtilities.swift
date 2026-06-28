@@ -15,7 +15,7 @@ class FileUtilities {
         return directories.contains { directory in
             let directoryURL = canonicalFileURL(directory)
 
-            return isSameOrChild(fileURL, of: directoryURL)
+            return isSameOrChild(fileURL, of: directoryURL) || (fileURL == directoryURL)
         }
     }
 

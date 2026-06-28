@@ -119,14 +119,12 @@ final class OpenAIProvider: LLMProvider {
 
 extension OpenAIProvider {
     private func toOpenAIInput(_ messages: [Message]) -> [[String: Any]] {
-        var input: [[String: Any]] = []
-        for message in messages {
-            
-            if let toolCalls = message.toolCalls,
-               (!toolCalls.isEmpty) {
+        var result: [[String: Any]] = []
 
+        for message in messages {
+            if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
                 for tc in toolCalls {
-                    input.append([
+                    result.append([
                         "type": "function_call",
                         "call_id": tc.id ?? "",
                         "name": tc.name,
@@ -135,8 +133,9 @@ extension OpenAIProvider {
                 }
                 continue
             }
-            if (message.role == MsgSource.tool.name) {
-                input.append([
+
+            if message.role == MsgSource.tool.name {
+                result.append([
                     "type": "function_call_output",
                     "call_id": message.toolCallId ?? "",
                     "output": message.text ?? ""
@@ -144,15 +143,48 @@ extension OpenAIProvider {
                 continue
             }
 
-            input.append([
+            result.append([
                 "role": message.role,
-                "content": message.text ?? ""
+                "content": openAIContent(for: message)
             ])
         }
 
-        return input
+        return result
     }
 
+    private func openAIContent(for message: Message) -> Any {
+        var content: [[String: Any]] = []
+
+        if let text = message.text, !text.isEmpty {
+            content.append([
+                "type": "input_text",
+                "text": text
+            ])
+        }
+
+        if let attachments = message.attachments {
+            for attachment in attachments {
+                do {
+                    let base64 = try attachment.toBase64()
+                    content.append([
+                        "type": "input_image",
+                        "image_url": "data:\(attachment.mimeType);base64,\(base64)"
+                    ])
+                } catch {
+                    print("Failed to process image attachment: \(error)")
+                }
+            }
+        }
+
+        if content.count == 1,
+           let text = content[0]["text"] as? String,
+           content[0]["type"] as? String == "input_text" {
+            return text
+        }
+
+        return content
+    }
+    
     private func jsonString(_ dict: [String: Any]) -> String {
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
               let string = String(data: data, encoding: .utf8) else { return "{}" }
