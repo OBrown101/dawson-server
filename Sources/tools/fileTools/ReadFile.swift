@@ -5,9 +5,14 @@
 //  Created by Ethan Brown on 5/17/26.
 //
 
+import Foundation
+
 class ReadFile: PermissionAware {
     let name = "read_file"
     let description = "Reads a file. Optionally reads only a specific line range and can prefix lines with line numbers. Returns the file path and visible line range. If file is long, read only the specific line range of interest."
+    
+    private let maxFileSize = 500_000  // 500KB limit
+    private let maxLinesWithoutRange = 100  // If no range specified, max 100 lines
     
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
         guard let path = args["path"] as? String,
@@ -122,31 +127,48 @@ class ReadFile: PermissionAware {
         let showLineNumbers = args["show_line_numbers"] as? Bool ?? false
 
         do {
+            let fileURL = URL(fileURLWithPath: path)
+            let fileSize = try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            
+            // Prevent reading massive files without line range
+            if fileSize > maxFileSize {
+                return "Error: File too large (\(fileSize) bytes > \(maxFileSize) limit). Use start/end parameters to read specific line range."
+            }
+
             let text = try String(contentsOfFile: path, encoding: .utf8)
             let lines = text.components(separatedBy: .newlines)
 
             let startLine = max(1, start ?? 1)
-            let endLine = min(lines.count, end ?? lines.count)
+            let endLine: Int
+            
+            // Auto-limit if no range specified
+            if start == nil && end == nil {
+                endLine = min(lines.count, maxLinesWithoutRange)
+                if lines.count > maxLinesWithoutRange {
+                    let suggestion = "File has \(lines.count) total lines. Showing first \(maxLinesWithoutRange). Use start/end to read specific range."
+                    let output = formatLines(lines[startLine-1..<endLine], start: startLine, showLineNumbers: showLineNumbers)
+                    return suggestion + "\n\n" + output
+                }
+            } else {
+                endLine = min(lines.count, end ?? lines.count)
+            }
 
-            guard startLine <= endLine else {
+            guard startLine <= endLine && startLine <= lines.count else {
                 return "Error: Invalid line range."
             }
 
-            var output: [String] = []
-
-            for lineNumber in startLine...endLine {
-                let line = lines[lineNumber - 1]
-                if showLineNumbers {
-                    output.append("\(lineNumber): \(line)")
-                } else {
-                    output.append(line)
-                }
-            }
-
-            let header = "File: \(path)\nLines: \(startLine)-\(endLine) of \(lines.count)\n"
-            return header + output.joined(separator: "\n")
+            let output = formatLines(lines[startLine-1..<endLine], start: startLine, showLineNumbers: showLineNumbers)
+            return output
         } catch {
             return "Error reading file: \(error.localizedDescription)"
         }
+    }
+    
+    private func formatLines(_ lines: ArraySlice<String>, start: Int, showLineNumbers: Bool) -> String {
+        let formatted = lines.enumerated().map { index, line in
+            let lineNum = start + index
+            return showLineNumbers ? "\(lineNum): \(line)" : line
+        }.joined(separator: "\n")
+        return formatted
     }
 }

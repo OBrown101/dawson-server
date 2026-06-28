@@ -11,6 +11,8 @@ class SearchFile: PermissionAware {
     let name = "search_file"
     let description = "Searches inside file contents for exact text and returns matching absolute file paths with line numbers. Use find_file instead when looking for filenames or directory names. Required parameters: path and pattern."
     
+    private let maxSearchResults = 50
+    
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
         guard let pattern = args["pattern"] as? String,
               !pattern.isEmpty else { return [] }
@@ -127,7 +129,7 @@ class SearchFile: PermissionAware {
         }
 
         let caseSensitive = args["case_sensitive"] as? Bool ?? false
-        let maxResults = max(1, args["max_results"] as? Int ?? 100)
+        let maxResults = min(maxSearchResults, max(1, args["max_results"] as? Int ?? maxSearchResults))
         
         do {
             let rootURL = URL(fileURLWithPath: path)
@@ -153,6 +155,7 @@ class SearchFile: PermissionAware {
             }
 
             var results: [String] = []
+            var totalMatches = 0
             let compareOptions: String.CompareOptions = caseSensitive ? [] : [.caseInsensitive]
 
             outerLoop: for fileURL in files {
@@ -160,18 +163,17 @@ class SearchFile: PermissionAware {
                     continue
                 }
 
-                let relativePath = (rootValues.isDirectory == true)
-                    ? fileURL.path.replacingOccurrences(of: rootURL.path + "/", with: "")
-                    : fileURL.lastPathComponent
-
                 let lines = text.components(separatedBy: .newlines)
 
                 for (index, line) in lines.enumerated() {
-                    if line.range(of: pattern, options: compareOptions) != nil {
-                        let trimmed = line.trimmingCharacters(in: .whitespaces)
-                        results.append("\(fileURL.path):\(index + 1): \(trimmed)")
+                    if (line.range(of: pattern, options: compareOptions) != nil) {
+                        totalMatches += 1
+                        if (results.count < maxResults) {
+                            let trimmed = line.trimmingCharacters(in: .whitespaces)
+                            results.append("\(fileURL.path):\(index + 1): \(trimmed)")
+                        }
 
-                        if results.count >= maxResults {
+                        if (results.count >= maxResults) {
                             break outerLoop
                         }
                     }

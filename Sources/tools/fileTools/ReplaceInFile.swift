@@ -124,7 +124,7 @@ class ReplaceInFile: PermissionAware {
             let updated = original.replacingCharacters(in: range, with: new)
             try updated.write(toFile: path, atomically: true, encoding: .utf8)
 
-            return "Successfully replaced text in \(path)"
+            return "Successfully replaced text in \(path)."
         } catch {
             return "Error replacing text: \(error.localizedDescription)"
         }
