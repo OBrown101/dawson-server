@@ -155,11 +155,6 @@ extension WebSocketServer {
         case .textPrompt:
             guard let textPrompt: String = guardPayload(userData.payload, dataType: userData.dataType.rawValue, ws: ws) else { return }
             
-            var deliveredUserData = userData
-            deliveredUserData.payload = AnyCodable("")
-            let response = WSPacket(type: .userData, payload: AnyCodable(deliveredUserData))
-            sendTask(response, ws: ws)
-            
             let streamState = AgentEventStreamState()
             await dawson.getChatResponse(chatUUID: userData.chatUUID, runUUID: userData.dataUUID, prompt: textPrompt,
                 onEvent: { event, runUUID in
@@ -167,6 +162,8 @@ extension WebSocketServer {
                     var payload: AnyCodable
                     let index = await streamState.getIndex(for: event.key)
                     await streamState.setCurrentRunUUID(runUUID)
+                
+                    self.sendUserPromptDelivered(userData, ws: ws)
                     
                     switch event {
                     case .agentState(let state):
@@ -220,12 +217,14 @@ extension WebSocketServer {
             }
         case .dataPrompt:
             break
+        case .cancelCmd:
+            await dawson.cancelAgentRun(agentUUID: userData.agentUUID)
+            
         }
     }
     
     private func handleUserInputResponse(_ response: UserInputResponse, ws: WebSocket) async {
         guard let dawson = dawson else { return }
-        var dataIndex: [String: Int32] = [:]
 
         let streamState = AgentEventStreamState()
         await dawson.getChatResumedResponse(response: response,
@@ -479,6 +478,13 @@ extension WebSocketServer {
 }
 
 extension WebSocketServer {
+    private func sendUserPromptDelivered(_ userData: UserData, ws: WebSocket) {
+        var deliveredUserData = userData
+        deliveredUserData.payload = AnyCodable("")
+        let response = WSPacket(type: .userData, payload: AnyCodable(deliveredUserData))
+        sendTask(response, ws: ws)
+    }
+    
     private func sendAgentDataCompleted(runUUID: String, lastDataIndex: Int32?, userUUID: String, agentUUID: String, ws: WebSocket) {
         let agentData = AgentData(
             dataUUID: runUUID,

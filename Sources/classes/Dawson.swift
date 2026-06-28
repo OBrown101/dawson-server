@@ -72,6 +72,10 @@ class DAWSON: @unchecked Sendable {
         await activeChats[chatUUID]?.getResumedResponse(response: response, onEvent: onEvent)
     }
     
+    func cancelAgentRun(agentUUID: String) async {
+        await AgentHandler.shared.cancelAgentRun(agentUUID)
+    }
+    
     func upsertChat(_ chat: Chat) async {
         if (!activeChats.keys.contains(chat.uuid)) {
             if (chat.uuid == DAWSON.primaryChatUUID) {

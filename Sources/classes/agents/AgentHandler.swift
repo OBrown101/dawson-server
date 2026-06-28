@@ -163,5 +163,6 @@ class AgentHandler: @unchecked Sendable {
 
     func cancelAgentRun(_ agentUUID: String) async {
         await AgentRunRegistry.shared.cancelAgentRun(agentUUID: agentUUID)
+        await activeAgents[agentUUID]?.cancelCurrentRun()
     }
 }

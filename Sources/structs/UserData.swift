@@ -19,5 +19,6 @@ struct UserData: Codable, Sendable {
     enum DataType: String, Codable {
         case textPrompt = "TEXT_PROMPT"
         case dataPrompt = "DATA_PROMPT"
+        case cancelCmd = "CANCEL_CMD"
     }
 }

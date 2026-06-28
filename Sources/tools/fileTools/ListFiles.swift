@@ -9,6 +9,7 @@ import Foundation
 
 class ListFiles: PermissionAware {
     let name = "list_files"
+    let description = "Lists files and directories under a known directory. Use this to inspect a directory structure when you already know the relevant folder. For locating a specific filename, use find_file instead."
     
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
         guard let path = args["path"] as? String,
@@ -23,7 +24,7 @@ class ListFiles: PermissionAware {
         return [
             "type": "function",
             "name": name,
-            "description": "Recursively lists files and directories under the specified path. Returns relative paths for token efficiency.",
+            "description": description,
             "parameters": [
                 "type": "object",
                 "properties": [
@@ -50,7 +51,7 @@ class ListFiles: PermissionAware {
     func anthropicSchema() -> [String : Any] {
         return [
             "name": name,
-            "description": "Recursively lists files and directories under the specified path. Returns relative paths for token efficiency.",
+            "description": description,
             "input_schema": [
                 "type": "object",
                 "properties": [
@@ -79,7 +80,7 @@ class ListFiles: PermissionAware {
             "type": "function",
             "function": [
                 "name": name,
-                "description": "Recursively lists files and directories under the specified path. Returns relative paths for token efficiency.",
+                "description": description,
                 "parameters": [
                     "type": "object",
                     "required": ["path"],
@@ -148,7 +149,7 @@ class ListFiles: PermissionAware {
                 return "No files found."
             }
 
-            return results.joined(separator: "")
+            return results.joined(separator: "\n")
         } catch {
             return "Error listing files: \(error.localizedDescription)"
         }

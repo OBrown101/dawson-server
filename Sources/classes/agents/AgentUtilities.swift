@@ -112,4 +112,15 @@ class AgentUtilities {
             - Treat this list as current for this run; it may change between runs.
             """
     }
+    
+    static func getRunCancelledMessage(runUUID: String, streamState: StreamTempState) async -> Message? {
+        let state = await streamState.snapshot()
+        let trimmedContent = state.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedThinking = state.thinking.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        guard (!trimmedContent.isEmpty || !trimmedThinking.isEmpty) else { return nil }
+        
+        let text = (trimmedContent.isEmpty) ? "[Run interrupted while thinking.]" : "\(trimmedContent)\n\n[Run interrupted.]"
+        return Message(runUUID: runUUID, role: MsgSource.assistant.name, text: text)
+    }
 }

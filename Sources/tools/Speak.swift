@@ -82,7 +82,7 @@ class Speak: Tool {
         #if os(macOS)
         speakMacOS(text, voice: voice)
         #endif
-        return ""
+        return "Spoken"
     }
 
     #if os(macOS)

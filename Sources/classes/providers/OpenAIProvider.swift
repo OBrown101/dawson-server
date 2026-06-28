@@ -100,6 +100,8 @@ final class OpenAIProvider: LLMProvider {
                     break
                 }
             }
+        } catch is CancellationError {
+            return ProviderResponse(createdAt: "", model: model.name, content: "")
         } catch {
             response.error = error
         }
