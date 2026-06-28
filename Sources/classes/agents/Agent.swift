@@ -462,14 +462,7 @@ class Agent: Codable, @unchecked Sendable {
             newMessages.append(contentsOf: toolResults)
 
             var promptMessage = trimmedHistory
-            if let workspacePrompt = AgentUtilities.getWorkspacesPrompt(mode: mode, directories) {
-                let newMessage = Message(runUUID: runUUID, role: MsgSource.system.name, text: workspacePrompt)
-                if let firstNonSystemIndex = promptMessage.firstIndex(where: { $0.role != MsgSource.system.name }) {
-                    promptMessage.insert(newMessage, at: firstNonSystemIndex)
-                } else {
-                    promptMessage.append(newMessage)
-                }
-            }
+            promptMessage = injectContextPrompts(promptMessage, runUUID: runUUID)
             promptMessage.append(contentsOf: newMessages)
             
             try Task.checkCancellation()
@@ -787,5 +780,38 @@ extension Agent {
     
     private func appendMessage(_ message: Message, agentUUID: String) {
         saveMessagesToHistory([message], agentUUID: agentUUID)
+    }
+}
+
+// MARK: - Context Injection (Pre-Provider)
+extension Agent {
+    private func injectContextPrompts(_ messages: [Message], runUUID: String) -> [Message] {
+        var contextMessages = messages
+        let systemMessages = buildContextSystemMessages(runUUID: runUUID)
+        
+        for systemMessage in systemMessages.reversed() {
+            if let firstNonSystemIndex = contextMessages.firstIndex(where: { $0.role != MsgSource.system.name }) {
+                contextMessages.insert(systemMessage, at: firstNonSystemIndex)
+            } else {
+                contextMessages.append(systemMessage)
+            }
+        }
+        
+        return contextMessages
+    }
+    
+    private func buildContextSystemMessages(runUUID: String) -> [Message] {
+        var messages: [Message] = []
+        
+        // Workspace prompt
+        if let workspacePrompt = AgentUtilities.getWorkspacesPrompt(mode: mode, directories) {
+            messages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: workspacePrompt))
+        }
+        
+        // Session info prompt
+        let sessionInfo = GetSessionInfo().getInfo()
+        messages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: sessionInfo))
+        
+        return messages
     }
 }

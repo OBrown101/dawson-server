@@ -10,6 +10,8 @@ import Foundation
 class FindFile: PermissionAware {
     let name = "find_file"
     let description = "Finds files or directories by name under a root path. Use this when looking for filenames or directory names such as README.md, *.kt, build.gradle.kts, App.swift, or ViewModel.kt. This does not search file contents. Returns absolute paths."
+    
+    private let maxFindResults = 50
 
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
         guard let path = args["path"] as? String,
@@ -93,7 +95,7 @@ class FindFile: PermissionAware {
         let includeDirectories = args["include_directories"] as? Bool ?? false
         let caseSensitive = args["case_sensitive"] as? Bool ?? false
         let includeHidden = args["include_hidden"] as? Bool ?? false
-        let maxResults = max(1, args["max_results"] as? Int ?? 100)
+        let maxResults = min(maxFindResults, max(1, args["max_results"] as? Int ?? maxFindResults))
 
         do {
             let rootURL = URL(fileURLWithPath: path)
@@ -113,6 +115,7 @@ class FindFile: PermissionAware {
 
             let regex = try regexFromWildcard(pattern, caseSensitive: caseSensitive)
             var results: [String] = []
+            var totalMatches = 0
 
             while let item = enumerator.nextObject() as? URL {
                 let values = try item.resourceValues(forKeys: [.isDirectoryKey, .isHiddenKey])
@@ -130,17 +133,21 @@ class FindFile: PermissionAware {
                 let range = NSRange(name.startIndex..<name.endIndex, in: name)
 
                 if regex.firstMatch(in: name, range: range) != nil {
-                    results.append(item.path)
+                    totalMatches += 1
+                    if results.count < maxResults {
+                        results.append(item.path)
+                    }
 
                     if (results.count >= maxResults) { break }
                 }
             }
 
-            if (results.isEmpty) {
+            if results.isEmpty {
                 return "No matching files found."
             }
 
-            return results.joined(separator: "\n")
+            let truncated = totalMatches > maxResults ? "\n(Showing \(maxResults) of \(totalMatches) results. Narrow your search pattern.)" : ""
+            return results.joined(separator: "\n") + truncated
         } catch {
             return "Error finding files: \(error.localizedDescription)"
         }
