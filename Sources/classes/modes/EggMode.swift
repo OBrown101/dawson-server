@@ -36,15 +36,15 @@ class EggMode: Mode {
     static func getPermissionDescription(for action: ModeAction) -> String {
         switch action {
         case .all:
-            return ""
+            return "Full system access is not permitted in Egg mode."
         case .read:
-            return ""
+            return "File reading is not permitted in Egg mode."
         case .write:
-            return ""
+            return "File writing is not permitted in Egg mode."
         case .command:
-            return ""
+            return "Command execution is not permitted in Egg mode."
         case .sudo:
-            return ""
+            return "Elevated privileges are not permitted in Egg mode."
         }
     }
     

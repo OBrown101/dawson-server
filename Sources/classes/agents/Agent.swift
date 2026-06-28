@@ -335,25 +335,25 @@ class Agent: Codable, @unchecked Sendable {
             let toolCalls = suspendData.toolCalls
             var tcIndex = suspendData.toolCallIndex
             
-            switch request.type {
-            case .permission:
-                if let accepted = userResponse.accepted,
-                   (accepted) {
-                    if (toolCalls.indices.contains(tcIndex)) {
+            if (toolCalls.indices.contains(tcIndex)) {
+                let tc = toolCalls[tcIndex]
+                
+                switch request.type {
+                case .permission:
+                    if (userResponse.accepted == true) {
                         // Need to execute original tool that requested permission (to prevent re-triggering request)
-                        let tc = toolCalls[tcIndex]
                         let toolOutput = await executeTool(tc)
-                        messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
-                        messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: toolOutput))
+                        messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: toolOutput, toolCallId: tc.id))
+                    } else {
+                        messages.append(
+                            Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse), toolCallId: tc.id))
                     }
-                } else {
-                    messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
+                case .confirmation:
+                    // Currently just inputs back into LLM, in future can be used for specific, binary requirements (not just approve/deny)
+                    messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse), toolCallId: tc.id))
+                case .input:
+                    messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse), toolCallId: tc.id))
                 }
-            case .confirmation:
-                // Currently just inputs back into LLM, in future can be used for specific, binary requirements (not just approve/deny)
-                messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
-            case .input:
-                messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse)))
             }
             
             // Tool permission/input handled and tool executed (or not)
@@ -431,7 +431,6 @@ class Agent: Codable, @unchecked Sendable {
 
                 print("Calling tool: \(tc.name)...")
                 await onEvent(.toolCall(tc.name), runUUID)
-                toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "CALLING TOOL: '\(tc.name)'"))
                 
                 try Task.checkCancellation()
                 let result = await runTool(tc)
@@ -440,19 +439,18 @@ class Agent: Codable, @unchecked Sendable {
                 switch result {
                 case .completed(let output):
                     await onEvent(.toolResult(output), runUUID)
-                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: output))
+                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: output, toolCallId: tc.id))
                     print("Tool result: completed.")
 
                 case .denied(let reason):
                     await onEvent(.toolResult(reason), runUUID)
-                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: reason))
+                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: reason, toolCallId: tc.id))
                     print("Tool result: denied -> \(reason)")
 
                 case .suspended(let request):
                     await onEvent(.userInputRequest(request), runUUID)
                     if (!request.prompt.isEmpty) {
                         await onEvent(.content(request.prompt), runUUID)
-                        toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: request.prompt))
                     }
                     print("Tool result: permission -> \(request.prompt)")
                     newMessages.append(contentsOf: toolResults)
@@ -573,7 +571,7 @@ class Agent: Codable, @unchecked Sendable {
             let output = await tool.execute(args: tc.argDict)
             await onEvent(.toolResult(output), runUUID)
 
-            summarizerMessages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: output))
+            summarizerMessages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: output, toolCallId: tc.id))
         }
     }
     

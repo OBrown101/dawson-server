@@ -59,6 +59,10 @@ class GetSessionInfo: ChatAware {
     }
 
     func execute(args: [String : Any]) async -> String {
+        return getInfo()
+    }
+    
+    func getInfo() -> String {
         guard let chat = chat else { return "Unable to find current chat session." }
         guard let agent = AgentHandler.shared.getAgent(chat.agentUUID) else { return "Unable to find agent assigned to chat session." }
         
@@ -76,7 +80,7 @@ class GetSessionInfo: ChatAware {
             canWrite: \(agent.mode.permissionDescription(for: .write))
             canCommands: \(agent.mode.permissionDescription(for: .command))
             canSudo: \(agent.mode.permissionDescription(for: .sudo))
-        Main agent-loop iteration limit: \(limitString)
+            iteration limit (for main agent-loop): \(limitString)
         """
     }
 }

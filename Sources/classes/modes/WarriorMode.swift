@@ -45,15 +45,15 @@ class WarriorMode: Mode {
     static func getPermissionDescription(for action: ModeAction) -> String {
         switch action {
         case .all:
-            return ""
+            return "Full system access is not permitted in Warrior mode."
         case .read:
-            return ""
+            return "Files within your session workspace can be read freely. External reads require approval."
         case .write:
-            return ""
+            return "Files within your session workspace can be written freely. External writes are not permitted."
         case .command:
-            return ""
+            return "Command execution is not permitted in Warrior mode."
         case .sudo:
-            return ""
+            return "Elevated privileges are not permitted in Warrior mode."
         }
     }
     

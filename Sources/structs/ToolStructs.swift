@@ -9,19 +9,95 @@ import Foundation
 @preconcurrency import AnyCodable
 
 struct ToolCall: Codable, Sendable {
+    let id: String?
     let name: String
     let arguments: [String: AnyCodable]
     
     enum CodingKeys: String, CodingKey {
+        case id
         case name
         case arguments
     }
     
-    static func fromProviderToolJSON(_ json: [[String: Any]]?) -> [ToolCall]? {
+    var argDict: [String: Any] {
+        arguments.mapValues { $0.value }
+    }
+    
+    static func fromProviderToolJSON(providerType: ProviderClient.ProviderType, _ json: [[String: Any]]?) -> [ToolCall]? {
+        guard let json else { return nil }
+        
+        let toolCalls: [ToolCall] = json.compactMap { callDict in
+            switch providerType {
+            case .ollama:
+                return fromOllama(callDict)
+
+            case .openai:
+                return fromOpenAI(callDict)
+
+            case .anthropic:
+                return fromAnthropic(callDict)
+            }
+        }
+
+        return toolCalls.isEmpty ? nil : toolCalls
+    }
+
+    private static func fromOllama(_ callDict: [String: Any]) -> ToolCall? {
+        guard let function = callDict["function"] as? [String: Any],
+              let name = function["name"] as? String else {
+            print("Invalid Ollama tool call:", callDict)
+            return nil
+        }
+
+        let id = callDict["id"] as? String
+        let arguments = function["arguments"] as? [String: Any] ?? [:]
+
+        return ToolCall(id: id, name: name, arguments: arguments.mapValues { AnyCodable($0) })
+    }
+    
+    private static func fromOpenAI(_ callDict: [String: Any]) -> ToolCall? {
+        guard let name = callDict["name"] as? String else {
+            print("Invalid OpenAI tool call:", callDict)
+            return nil
+        }
+
+        let id = callDict["call_id"] as? String ?? callDict["id"] as? String
+        var arguments: [String: Any] = [:]
+
+        if let args = callDict["arguments"] as? String,
+           let data = args.data(using: .utf8),
+           let decoded = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            arguments = decoded
+        } else if let args = callDict["arguments"] as? [String: Any] {
+            arguments = args
+        }
+
+        return ToolCall(id: id, name: name, arguments: arguments.mapValues { AnyCodable($0) })
+    }
+    
+    private static func fromAnthropic(_ callDict: [String: Any]) -> ToolCall? {
+        guard let name = callDict["name"] as? String else {
+            print("Invalid Anthropic tool call:", callDict)
+            return nil
+        }
+
+        let id = callDict["id"] as? String
+        let arguments = callDict["input"] as? [String: Any] ?? [:]
+
+        return ToolCall(
+            id: id,
+            name: name,
+            arguments: arguments.mapValues { AnyCodable($0) }
+        )
+    }
+    
+    /*
+    static func fromProviderToolJSON(providerType: ProviderClient.ProviderType, _ json: [[String: Any]]?) -> [ToolCall]? {
         guard let json else { return nil }
 
         var toolCalls: [ToolCall] = []
         for callDict in json {
+            var id: String?
             var name: String?
             var arguments: [String: Any] = [:]
 
@@ -53,8 +129,5 @@ struct ToolCall: Codable, Sendable {
 
         return toolCalls.isEmpty ? nil : toolCalls
     }
-    
-    var argDict: [String: Any] {
-        arguments.mapValues { $0.value }
-    }
+    */
 }

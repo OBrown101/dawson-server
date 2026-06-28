@@ -59,15 +59,15 @@ class FledglingMode: Mode {
     static func getPermissionDescription(for action: ModeAction) -> String {
         switch action {
         case .all:
-            return ""
+            return "Full system access is not permitted in Fledgling mode."
         case .read:
-            return ""
+            return "Files within your session workspace can be read. External reads require approval."
         case .write:
-            return ""
+            return "All file writes require your explicit approval in Fledgling mode."
         case .command:
-            return ""
+            return "Command execution is not permitted in Fledgling mode."
         case .sudo:
-            return ""
+            return "Elevated privileges are not permitted in Fledgling mode."
         }
     }
     
