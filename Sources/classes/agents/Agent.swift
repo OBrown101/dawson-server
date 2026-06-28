@@ -65,7 +65,7 @@ class Agent: Codable, @unchecked Sendable {
     static let agentsHistoryDirectory = agentsDirectory.appendingPathComponent("history")
     
     static var optionalTools: [Tool] {
-        return [WriteFile(), SearchFile(), FindFile(), ReplaceInFile(), ReadFile(), ListFiles(), Speak(), RichFormatter()]
+        return [ReadImage(), WriteFile(), SearchFile(), FindFile(), ReplaceInFile(), ReadFile(), ListFiles(), Speak(), RichFormatter()]
     }
     static var requiredTools: [Tool] {
         [RequestUserInput(), EnvAwareness(), GetFullSkill(), GetSessionInfo()] + Agent.memoryTools
@@ -432,14 +432,26 @@ class Agent: Codable, @unchecked Sendable {
                 print("Calling tool: \(tc.name)...")
                 await onEvent(.toolCall(tc.name), runUUID)
                 
-                try Task.checkCancellation()
+                if (Task.isCancelled) {
+                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "Tool call cancelled before completion.", toolCallId: tc.id))
+                    continue
+                }
                 let result = await runTool(tc)
-                try Task.checkCancellation()
+                if (Task.isCancelled) {
+                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "Tool call cancelled before completion.", toolCallId: tc.id))
+                    continue
+                }
 
                 switch result {
                 case .completed(let output):
                     await onEvent(.toolResult(output), runUUID)
                     toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: output, toolCallId: tc.id))
+                    
+                    if (tc.name == ReadImage().name),
+                        let imageMessage = await messageFromImageTC(runUUID: runUUID, toolCall: tc) {
+                        toolResults.append(imageMessage)
+                    }
+                    
                     print("Tool result: completed.")
 
                 case .denied(let reason):
@@ -497,6 +509,15 @@ class Agent: Codable, @unchecked Sendable {
             )
             
             if (Task.isCancelled) {
+                for index in pendingToolIndex..<pendingToolCalls.count {
+                    let tc = pendingToolCalls[index]
+
+                    let alreadyHasResult = newMessages.contains { ($0.role == MsgSource.tool.name) && ($0.toolCallId == tc.id) }
+                    if (!alreadyHasResult) {
+                        newMessages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "Tool call cancelled before completion.", toolCallId: tc.id))
+                    }
+                }
+                
                 if let interrupted = await AgentUtilities.getRunCancelledMessage(runUUID: runUUID, streamState: streamTempState) {
                     newMessages.append(interrupted)
                 }
@@ -783,7 +804,6 @@ extension Agent {
     }
 }
 
-// MARK: - Context Injection (Pre-Provider)
 extension Agent {
     private func injectContextPrompts(_ messages: [Message], runUUID: String) -> [Message] {
         var contextMessages = messages
@@ -813,5 +833,25 @@ extension Agent {
         messages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: sessionInfo))
         
         return messages
+    }
+    
+    private func messageFromImageTC(runUUID: String, toolCall: ToolCall) async -> Message? {
+        guard let path = toolCall.argDict["path"] as? String,
+              !path.isEmpty else { return nil }
+
+        let maxSizeBytes = toolCall.argDict["max_size_bytes"] as? Int ?? 524_288
+        let attemptCompression = toolCall.argDict["attempt_compression"] as? Bool ?? true
+
+        do {
+            let attachment = try await ImageProcessor.shared.loadImageAsAttachment(
+                fromFilePath: path,
+                maxSizeBytes: maxSizeBytes,
+                attemptCompression: attemptCompression
+            )
+
+            return Message(runUUID: runUUID, role: MsgSource.user.name, text: "Image attached for visual analysis: \(path)", attachments: [attachment])
+        } catch {
+            return Message(runUUID: runUUID, role: MsgSource.user.name, text: "Failed to attach image for visual analysis: \(error.localizedDescription)")
+        }
     }
 }

@@ -20,10 +20,7 @@ final class OllamaProvider: LLMProvider {
         
         var payload: [String: Any] = [
             "model": model.name,
-            "messages": messages.map {[
-                "role": $0.role,
-                "content": $0.text
-            ]},
+            "messages": toOllamaMessages(messages),
             "thinking": useThinking,
             "options": [
                 "num_ctx": contextWindow
@@ -85,8 +82,7 @@ final class OllamaProvider: LLMProvider {
             return ProviderResponse(createdAt: "", providerType: .ollama, model: model.name, content: "")
         } catch {
             print("Provider error:", error)
-            var errorResponse = response
-            errorResponse.error = error
+            response.error = error
         }
         return response
     }
@@ -98,10 +94,43 @@ final class OllamaProvider: LLMProvider {
             return []
         }
 
-        let llmModels = models.compactMap { model -> LLMModel? in
+        return models.compactMap { model in
             guard let name = model["name"] as? String else { return nil }
             return LLMModel(id: name, name: name, provider: .ollama)
         }
-        return llmModels
+    }
+}
+
+extension OllamaProvider {
+    private func toOllamaMessages(_ messages: [Message]) -> [[String: Any]] {
+        var result: [[String: Any]] = []
+
+        for message in messages {
+            var msgDict: [String: Any] = [
+                "role": message.role,
+                "content": message.text ?? ""
+            ]
+
+            if let attachments = message.attachments,
+               !attachments.isEmpty {
+                var images: [String] = []
+
+                for attachment in attachments {
+                    do {
+                        images.append(try attachment.toBase64())
+                    } catch {
+                        print("Failed to process image attachment: \(error)")
+                    }
+                }
+
+                if !images.isEmpty {
+                    msgDict["images"] = images
+                }
+            }
+
+            result.append(msgDict)
+        }
+
+        return result
     }
 }

@@ -91,18 +91,16 @@ final class AnthropicProvider: LLMProvider {
                         continue
                     }
 
-                    if deltaType == "text_delta",
+                    if (deltaType == "text_delta"),
                        let text = delta["text"] as? String {
                         chunkResponse.content = text
                         response.content += text
                         await onUpdate(chunkResponse)
+                    } else if (deltaType == "input_json_delta"),
+                              let jsonDelta = delta["input_json"] as? String {
+                        currentToolInput += jsonDelta
                     }
-
-                    if deltaType == "input_json_delta",
-                       let partialJson = delta["partial_json"] as? String {
-                        currentToolInput += partialJson
-                    }
-
+                    
                 case "content_block_stop":
                     if !currentToolCall.isEmpty {
                         currentToolCall["input_json"] = currentToolInput
@@ -116,7 +114,15 @@ final class AnthropicProvider: LLMProvider {
                         currentToolCall = [:]
                         currentToolInput = ""
                     }
-
+                    
+                case "message_delta":
+                    if let delta = json["delta"] as? [String: Any],
+                       let stopReason = delta["stop_reason"] as? String {
+                        if stopReason == "stop_sequence" || stopReason == "end_turn" {
+                            // Message complete
+                        }
+                    }
+                    
                 case "message_stop":
                     break
 
@@ -157,41 +163,78 @@ final class AnthropicProvider: LLMProvider {
 
 extension AnthropicProvider {
     private func toAnthropicMessages(_ messages: [Message]) -> [[String: Any]] {
-        messages
-            .filter { $0.role != MsgSource.system.name }
-            .map { message in
-                if let toolCalls = message.toolCalls,
-                   !toolCalls.isEmpty {
-                    return [
-                        "role": "assistant",
-                        "content": toolCalls.map { tc in
-                            [
-                                "type": "tool_use",
-                                "id": tc.id ?? "",
-                                "name": tc.name,
-                                "input": tc.argDict
-                            ]
-                        }
-                    ]
-                }
+        var result: [[String: Any]] = []
 
-                if (message.role == MsgSource.tool.name) {
-                    return [
-                        "role": "user",
-                        "content": [
-                            [
-                                "type": "tool_result",
-                                "tool_use_id": message.toolCallId ?? message.uuid,
-                                "content": message.text ?? ""
-                            ]
+        for message in messages {
+            if message.role == MsgSource.system.name {
+                continue
+            }
+
+            if let toolCalls = message.toolCalls,
+               !toolCalls.isEmpty {
+                result.append([
+                    "role": MsgSource.assistant.name,
+                    "content": toolCalls.map { tc in
+                        [
+                            "type": "tool_use",
+                            "id": tc.id ?? "",
+                            "name": tc.name,
+                            "input": tc.argDict
+                        ]
+                    }
+                ])
+                continue
+            }
+
+            if message.role == MsgSource.tool.name {
+                result.append([
+                    "role": MsgSource.user.name,
+                    "content": [
+                        [
+                            "type": "tool_result",
+                            "tool_use_id": message.toolCallId ?? message.uuid,
+                            "content": message.text ?? ""
                         ]
                     ]
-                }
-
-                return [
-                    "role": (message.role == MsgSource.assistant.name) ? MsgSource.assistant.name : MsgSource.user.name,
-                    "content": message.text ?? ""
-                ]
+                ])
+                continue
             }
+
+            var contentArray: [[String: Any]] = []
+
+            if let text = message.text,
+               !text.isEmpty {
+                contentArray.append([
+                    "type": "text",
+                    "text": text
+                ])
+            }
+
+            if let attachments = message.attachments,
+               !attachments.isEmpty {
+                for attachment in attachments {
+                    do {
+                        let base64 = try attachment.toBase64()
+                        contentArray.append([
+                            "type": "image",
+                            "source": [
+                                "type": "base64",
+                                "media_type": attachment.mimeType,
+                                "data": base64
+                            ]
+                        ])
+                    } catch {
+                        print("Failed to process image attachment: \(error)")
+                    }
+                }
+            }
+
+            result.append([
+                "role": message.role == MsgSource.assistant.name ? MsgSource.assistant.name : MsgSource.user.name,
+                "content": contentArray.isEmpty ? "" : contentArray
+            ])
+        }
+
+        return result
     }
 }
