@@ -16,7 +16,7 @@ final class AnthropicProvider: LLMProvider {
         contextWindow: Int32,
         onUpdate: @Sendable @escaping (ProviderResponse) async -> Void
     ) async -> ProviderResponse {
-        var response = ProviderResponse(createdAt: "", model: model.name, content: "")
+        var response = ProviderResponse(createdAt: "", providerType: .anthropic, model: model.name, content: "")
 
         let systemPrompt = messages
             .filter { $0.role == MsgSource.system.name }
@@ -25,7 +25,7 @@ final class AnthropicProvider: LLMProvider {
         
         var payload: [String: Any] = [
             "model": model.id,
-            "max_tokens": 4096,
+            "max_tokens": 8192,
             "messages": toAnthropicMessages(messages),
             "stream": true
         ]
@@ -68,7 +68,7 @@ final class AnthropicProvider: LLMProvider {
                     continue
                 }
 
-                var chunkResponse = ProviderResponse(createdAt: "", model: model.name, content: "")
+                var chunkResponse = ProviderResponse(createdAt: "", providerType: .anthropic, model: model.name, content: "")
 
                 switch type {
                 case "message_start":
@@ -132,7 +132,7 @@ final class AnthropicProvider: LLMProvider {
                 }
             }
         } catch is CancellationError {
-            return ProviderResponse(createdAt: "", model: model.name, content: "")
+            return ProviderResponse(createdAt: "", providerType: .anthropic, model: model.name, content: "")
         } catch {
             response.error = error
         }
@@ -160,13 +160,28 @@ extension AnthropicProvider {
         messages
             .filter { $0.role != MsgSource.system.name }
             .map { message in
+                if let toolCalls = message.toolCalls,
+                   !toolCalls.isEmpty {
+                    return [
+                        "role": "assistant",
+                        "content": toolCalls.map { tc in
+                            [
+                                "type": "tool_use",
+                                "id": tc.id ?? "",
+                                "name": tc.name,
+                                "input": tc.argDict
+                            ]
+                        }
+                    ]
+                }
+
                 if (message.role == MsgSource.tool.name) {
                     return [
-                        "role": MsgSource.user.name,
+                        "role": "user",
                         "content": [
                             [
                                 "type": "tool_result",
-                                "tool_use_id": message.uuid,    // TODO: This needs to be a tool call id that is unique to each tool call
+                                "tool_use_id": message.toolCallId ?? message.uuid,
                                 "content": message.text ?? ""
                             ]
                         ]
@@ -174,7 +189,7 @@ extension AnthropicProvider {
                 }
 
                 return [
-                    "role": (message.role == MsgSource.assistant.name) ? "assistant" : "user",
+                    "role": (message.role == MsgSource.assistant.name) ? MsgSource.assistant.name : MsgSource.user.name,
                     "content": message.text ?? ""
                 ]
             }

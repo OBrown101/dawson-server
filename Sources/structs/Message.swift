@@ -14,9 +14,10 @@ struct Message: Codable, Sendable {
     let model: String
     let role: String
     let text: String?
+    let toolCallId: String?      // Represents ToolCall.id when text is the result from that tool's execution
     let toolCalls: [ToolCall]?
     
-    init(uuid: String = UUID().uuidString, runUUID: String, createdAt: Date = Date.now, model: String = "", role: String, text: String?, toolCalls: [ToolCall]? = nil) {
+    init(uuid: String = UUID().uuidString, runUUID: String, createdAt: Date = Date.now, model: String = "", role: String, text: String?, toolCallId: String? = nil, toolCalls: [ToolCall]? = nil) {
         self.uuid = uuid
         self.runUUID = runUUID
         self.createdAt = createdAt
@@ -24,6 +25,7 @@ struct Message: Codable, Sendable {
         self.role = role
         self.text = text
         self.toolCalls = toolCalls
+        self.toolCallId = toolCallId
     }
     
     static func fromProvider(_ providerResponse: ProviderResponse, runUUID: String) -> Message {
@@ -34,6 +36,6 @@ struct Message: Codable, Sendable {
             model: providerResponse.model,
             role: MsgSource.assistant.name,
             text: providerResponse.content,
-            toolCalls: ToolCall.fromProviderToolJSON(providerResponse.toolCalls))
+            toolCalls: ToolCall.fromProviderToolJSON(providerType: providerResponse.providerType, providerResponse.toolCalls))
     }
 }

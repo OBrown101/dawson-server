@@ -25,15 +25,15 @@ class UltimateMode: Mode {
     static func getPermissionDescription(for action: ModeAction) -> String {
         switch action {
         case .all:
-            return ""
+            return "Full system access is unrestricted in Ultimate mode."
         case .read:
-            return ""
+            return "File reading is unrestricted in Ultimate mode."
         case .write:
-            return ""
+            return "File writing is unrestricted in Ultimate mode."
         case .command:
-            return ""
+            return "Command execution is unrestricted in Ultimate mode."
         case .sudo:
-            return ""
+            return "Elevated privileges are unrestricted in Ultimate mode."
         }
     }
     

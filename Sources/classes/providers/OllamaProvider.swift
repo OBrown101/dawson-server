@@ -16,7 +16,7 @@ final class OllamaProvider: LLMProvider {
         contextWindow: Int32,
         onUpdate: @Sendable @escaping (ProviderResponse) async -> Void
     ) async -> ProviderResponse {
-        var response = ProviderResponse(createdAt: "", model: model.name, content: "")
+        var response = ProviderResponse(createdAt: "", providerType: .ollama, model: model.name, content: "")
         
         var payload: [String: Any] = [
             "model": model.name,
@@ -44,7 +44,7 @@ final class OllamaProvider: LLMProvider {
                 
                 guard let json = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else { return response }
                 
-                var chunkResponse = ProviderResponse(createdAt: "", model: "", content: "")
+                var chunkResponse = ProviderResponse(createdAt: "", providerType: .ollama, model: "", content: "")
                 
                 if let created = json["createdAt"] as? String {
                     chunkResponse.createdAt = created
@@ -82,7 +82,7 @@ final class OllamaProvider: LLMProvider {
                 }
             }
         } catch is CancellationError {
-            return ProviderResponse(createdAt: "", model: model.name, content: "")
+            return ProviderResponse(createdAt: "", providerType: .ollama, model: model.name, content: "")
         } catch {
             print("Provider error:", error)
             var errorResponse = response

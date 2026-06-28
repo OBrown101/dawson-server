@@ -3,6 +3,7 @@ import AnyCodable
 
 struct ProviderResponse {
     var createdAt: String
+    var providerType: ProviderClient.ProviderType
     var model: String
     var content: String
     var thinking: String = ""
