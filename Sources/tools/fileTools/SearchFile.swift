@@ -9,6 +9,7 @@ import Foundation
 
 class SearchFile: PermissionAware {
     let name = "search_file"
+    let description = "Searches inside file contents for exact text and returns matching absolute file paths with line numbers. Use find_file instead when looking for filenames or directory names. Required parameters: path and pattern."
     
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
         guard let pattern = args["pattern"] as? String,
@@ -23,14 +24,14 @@ class SearchFile: PermissionAware {
         return [
             "type": "function",
             "name": name,
-            "description": "Searches recursively for text within files and returns matching lines with file paths and line numbers.",
+            "description": description,
             "parameters": [
                 "type": "object",
                 "required": ["pattern", "path"],
                 "properties": [
                     "pattern": [
                         "type": "string",
-                        "description": "The text to search for"
+                        "description": "The text content to search for inside files. Not a filename pattern."
                     ],
                     "path": [
                         "type": "string",
@@ -54,14 +55,14 @@ class SearchFile: PermissionAware {
     func anthropicSchema() -> [String : Any] {
         return [
             "name": name,
-            "description": "Searches recursively for text within files and returns matching lines with file paths and line numbers.",
+            "description": description,
             "input_schema": [
                 "type": "object",
                 "required": ["pattern", "path"],
                 "properties": [
                     "pattern": [
                         "type": "string",
-                        "description": "The text to search for"
+                        "description": "The text content to search for inside files. Not a filename pattern."
                     ],
                     "path": [
                         "type": "string",
@@ -87,14 +88,14 @@ class SearchFile: PermissionAware {
             "type": "function",
             "function": [
                 "name": name,
-                "description": "Searches recursively for text within files and returns matching lines with file paths and line numbers.",
+                "description": description,
                 "parameters": [
                     "type": "object",
                     "required": ["pattern", "path"],
                     "properties": [
                         "pattern": [
                             "type": "string",
-                            "description": "The text to search for"
+                            "description": "The text content to search for inside files. Not a filename pattern."
                         ],
                         "path": [
                             "type": "string",
@@ -168,7 +169,7 @@ class SearchFile: PermissionAware {
                 for (index, line) in lines.enumerated() {
                     if line.range(of: pattern, options: compareOptions) != nil {
                         let trimmed = line.trimmingCharacters(in: .whitespaces)
-                        results.append("\(relativePath):\(index + 1): \(trimmed)")
+                        results.append("\(fileURL.path):\(index + 1): \(trimmed)")
 
                         if results.count >= maxResults {
                             break outerLoop
@@ -181,7 +182,7 @@ class SearchFile: PermissionAware {
                 return "No matches found."
             }
 
-            return results.joined(separator: "")
+            return results.joined(separator: "\n")
         } catch {
             return "Error searching files: \(error.localizedDescription)"
         }

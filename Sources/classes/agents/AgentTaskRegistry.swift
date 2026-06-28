@@ -45,6 +45,7 @@ actor AgentRunRegistry {
 
         tasksByRunUUID[runUUID]?.cancel()
         remove(runUUID: runUUID)
+        print("Agent (\(agentUUID)) run cancelled.")
     }
 
     func cancelAll() {

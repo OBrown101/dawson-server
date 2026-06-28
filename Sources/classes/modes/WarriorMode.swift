@@ -8,7 +8,7 @@
 import Foundation
 
 class WarriorMode: Mode {
-    static let iterationLimit: Int? = 50
+    static let iterationLimit: Int? = 400
     
     required init() {
         
@@ -35,7 +35,11 @@ class WarriorMode: Mode {
         guard let path = request.target else {
             return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Missing \(request.action.rawValue) target path."))
         }
-        return PermissionEvaluation(request: request, decision: .allowed)
+        if (FileUtilities.inSessionDirectories(path: path, directories: agent.directories)) {
+            return PermissionEvaluation(request: request, decision: .allowed)
+        } else {
+            return PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Read outside session workspace: \(path)"))
+        }
     }
     
     static func getPermissionDescription(for action: ModeAction) -> String {

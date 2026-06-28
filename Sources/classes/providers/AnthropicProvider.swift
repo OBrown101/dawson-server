@@ -131,6 +131,8 @@ final class AnthropicProvider: LLMProvider {
                     break
                 }
             }
+        } catch is CancellationError {
+            return ProviderResponse(createdAt: "", model: model.name, content: "")
         } catch {
             response.error = error
         }

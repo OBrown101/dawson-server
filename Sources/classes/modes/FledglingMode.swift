@@ -8,7 +8,7 @@
 import Foundation
 
 class FledglingMode: Mode {
-    static let iterationLimit: Int? = 30
+    static let iterationLimit: Int? = 300
     
     required init() {
         
@@ -35,7 +35,7 @@ class FledglingMode: Mode {
     
     static func evaluateRead(_ request: PermissionRequest, agent: Agent) -> PermissionEvaluation {
         guard let path = request.target else {
-            return PermissionEvaluation(request: request, decision: .denied(reason: "Missing read target path."))
+            return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Missing read target path."))
         }
         if (FileUtilities.inSessionDirectories(path: path, directories: agent.directories)) {
             return PermissionEvaluation(request: request, decision: .allowed)

@@ -16,7 +16,7 @@ class Loader: @unchecked Sendable {
         let memorySchema = loadMemory()
         let skillSummaries = loadSkillSummaries()
 //        let basicInfo = loadBasicInfo()
-        return [primarySoul, dynamicSoul, memorySchema, skillSummaries].joined(separator: "\n")
+        return [primarySoul, dynamicSoul, skillSummaries, memorySchema].joined(separator: "\n")
     }
     
     func loadBasicInfo() -> String {
@@ -79,20 +79,31 @@ class Loader: @unchecked Sendable {
             """
         }.joined(separator: "\n")
         
+        let fullSkillTool = GetFullSkill().name
+        
         return """
-        ## BRIEF SUMMARY FOR EACH OF YOUR SKILLS ##
-        These are lightweight summaries of the skills available to you. Before beginning any multi-step task, check whether one of these skills matches. 
-        Skills are instruction packs, not executable tools.
+        ## BRIEF SUMMARY OF YOUR AVAILABLE SKILLS ##
 
-        When a user request matches a skill:
-        1. Call get_full_skill to read the skill's SKILL.md.
-        2. Follow the instructions from that skill using your normal tools.
-        3. Do not try to "run" or "execute" the skill.
-        4. The skill directory is only where the instructions live; it is not the target project unless the user explicitly says so.
+        The following are brief summaries of specialized skills available to you. A skill is an instruction pack that teaches you how to perform a particular workflow or task.
+
+        Before beginning any non-trivial or multi-step task, first review these summaries and decide whether one clearly matches the user's request.
+
+        If a skill clearly applies:
+        1. Call `\(fullSkillTool)` to read its complete instructions.
+        2. Follow those instructions while using your normal tools.
+        3. Continue the task until it is complete.
+
+        If no skill clearly applies:
+        Proceed normally without using a skill.
+
+        Do not call `\(fullSkillTool)` for simple questions, brief explanations, casual conversation, or tasks that do not benefit from a specialized workflow.
+
+        A skill's directory only contains the skill itself. It is **not** the project or data you should operate on unless the user explicitly tells you to work there.
 
         Available skills:
-        
+
         \(summaries)
+
         ## --- ##
         """
     }

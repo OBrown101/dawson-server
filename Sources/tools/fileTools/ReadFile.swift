@@ -7,6 +7,7 @@
 
 class ReadFile: PermissionAware {
     let name = "read_file"
+    let description = "Reads a file. Optionally reads only a specific line range and can prefix lines with line numbers. Returns the file path and visible line range. If file is long, read only the specific line range of interest."
     
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
         guard let path = args["path"] as? String,
@@ -21,9 +22,7 @@ class ReadFile: PermissionAware {
         return [
             "type": "function",
             "name": name,
-            "description": """
-            Reads a file. Optionally reads only a specific line range and can prefix lines with line numbers. If file is long, DO NOT read the entire content, you should read only the specific line range of interest.
-            """,
+            "description": description,
             "parameters": [
                 "type": "object",
                 "properties": [
@@ -53,9 +52,7 @@ class ReadFile: PermissionAware {
     func anthropicSchema() -> [String : Any] {
         return [
             "name": name,
-            "description": """
-            Reads a file. Optionally reads only a specific line range and can prefix lines with line numbers. If file is long, DO NOT read the entire content, you should read only the specific line range of interest.
-            """,
+            "description": description,
             "input_schema": [
                 "type": "object",
                 "properties": [
@@ -87,10 +84,7 @@ class ReadFile: PermissionAware {
             "type": "function",
             "function": [
                 "name": name,
-                "description":
-                """
-                Reads a file. Optionally reads only a specific line range and can prefix lines with line numbers. If file is long, DO NOT read the entire content, you should read only the specific line range of interest.
-                """,
+                "description": description,
                 "parameters": [
                     "type": "object",
                     "required": ["path"],
@@ -149,7 +143,8 @@ class ReadFile: PermissionAware {
                 }
             }
 
-            return output.joined(separator: "\n")
+            let header = "File: \(path)\nLines: \(startLine)-\(endLine) of \(lines.count)\n"
+            return header + output.joined(separator: "\n")
         } catch {
             return "Error reading file: \(error.localizedDescription)"
         }

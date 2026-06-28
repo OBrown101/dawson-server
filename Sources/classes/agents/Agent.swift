@@ -29,8 +29,8 @@ actor AgentRunner {
         running = true
     }
     
-    func setRunning(_ running: Bool = true) {
-        self.running = running
+    func stop() {
+        running = false
     }
     
     func isRunning() -> Bool {
@@ -65,7 +65,7 @@ class Agent: Codable, @unchecked Sendable {
     static let agentsHistoryDirectory = agentsDirectory.appendingPathComponent("history")
     
     static var optionalTools: [Tool] {
-        return [WriteFile(), SearchFile(), PatchFile(), ReplaceInFile(), ReadFile(), ListFiles(), Speak(), RichFormatter()]
+        return [WriteFile(), SearchFile(), FindFile(), ReplaceInFile(), ReadFile(), ListFiles(), Speak(), RichFormatter()]
     }
     static var requiredTools: [Tool] {
         [RequestUserInput(), EnvAwareness(), GetFullSkill(), GetSessionInfo()] + Agent.memoryTools
@@ -174,6 +174,14 @@ class Agent: Codable, @unchecked Sendable {
         provider = Provider.provider(for: model.provider)
     }
     
+    func cancelCurrentRun() async {
+        suspendData = nil
+        state = .ready
+        saveMetadata()
+        updatedTimestamp = Date.now.epochMillis
+        await runner.stop()
+    }
+    
     private func suspendSession(
         runUUID: String,
         iterationIndex: Int,
@@ -278,15 +286,13 @@ class Agent: Codable, @unchecked Sendable {
             
             newMessages.append(Message(runUUID: runUUID, role: MsgSource.user.name, text: userPrompt))
             
-            let loopMessages = try await runInternalLoop(
+            let (loopMessages, newState) = try await runInternalLoop(
                 runUUID: runUUID,
                 startMessages: newMessages,
                 onEvent: onEvent
             )
             
-            if (self.state != .awaitingInput) {
-                try Task.checkCancellation()
-                
+            if (newState != .awaitingInput) {
                 await runMemorySessionSummarizer(
                     runUUID: runUUID,
                     messages: loopMessages,
@@ -297,10 +303,16 @@ class Agent: Codable, @unchecked Sendable {
             
             saveMessagesToHistory(loopMessages, agentUUID: uuid)
             saveMetadata()
-            await runner.setRunning(false)
+            
+            if let newState = newState {
+                await onEvent(.agentState(newState), runUUID)
+                self.state = newState
+            }
+            
+            await runner.stop()
             return loopMessages
         } catch {
-            await runner.setRunning(false)
+            await runner.stop()
             throw error
         }
     }
@@ -347,8 +359,9 @@ class Agent: Codable, @unchecked Sendable {
             // Tool permission/input handled and tool executed (or not)
             tcIndex += 1
             self.suspendData = nil
+            let originalMessageCount = messages.count
             
-            let loopMessages = try await runInternalLoop(
+            let (loopMessages, newState) = try await runInternalLoop(
                 runUUID: suspendData.runUUID,
                 iterationIndex: suspendData.iterationIndex,
                 startMessages: messages,
@@ -357,7 +370,7 @@ class Agent: Codable, @unchecked Sendable {
                 onEvent: onEvent
             )
             
-            if (self.state != .awaitingInput) {
+            if (newState != .awaitingInput) {
                 await runMemorySessionSummarizer(
                     runUUID: runUUID,
                     messages: loopMessages,
@@ -366,12 +379,19 @@ class Agent: Codable, @unchecked Sendable {
                 await setSummary(history)
             }
             
-            saveMessagesToHistory(loopMessages, agentUUID: self.uuid)
+            let newOnlyMessages = Array(loopMessages.dropFirst(originalMessageCount))
+            saveMessagesToHistory(newOnlyMessages, agentUUID: self.uuid)
             saveMetadata()
-            await runner.setRunning(false)
+            
+            if let newState = newState {
+                await onEvent(.agentState(newState), runUUID)
+                self.state = newState
+            }
+            
+            await runner.stop()
             return loopMessages
         } catch {
-            await runner.setRunning(false)
+            await runner.stop()
             throw error
         }
     }
@@ -383,7 +403,7 @@ class Agent: Codable, @unchecked Sendable {
         existingToolCalls: [ToolCall] = [],
         existingToolCallIndex: Int = 0,
         onEvent: @escaping (@Sendable (_ event: AgentEvent, _ runUUID: String) async -> Void)
-    ) async throws -> [Message] {
+    ) async throws -> ([Message], AgentState?) {
         await onEvent(.agentState(.processing), runUUID)
         self.state = .processing
         
@@ -438,9 +458,7 @@ class Agent: Codable, @unchecked Sendable {
                     newMessages.append(contentsOf: toolResults)
                     suspendSession(runUUID: runUUID, iterationIndex: iterations, messages: newMessages, userInputRequest: request, toolCalls: pendingToolCalls, toolCallIndex: index)
                     
-                    await onEvent(.agentState(.awaitingInput), runUUID)
-                    self.state = .awaitingInput
-                    return newMessages
+                    return (newMessages, .awaitingInput)
                 }
             }
             newMessages.append(contentsOf: toolResults)
@@ -457,6 +475,8 @@ class Agent: Codable, @unchecked Sendable {
             promptMessage.append(contentsOf: newMessages)
             
             try Task.checkCancellation()
+            
+            let streamTempState = StreamTempState()
             let response = await provider.send(
                 messages: promptMessage,
                 model: model,
@@ -471,6 +491,7 @@ class Agent: Codable, @unchecked Sendable {
                             await onEvent(.agentState(.thinking), runUUID)
                             self.state = .thinking
                         }
+                        await streamTempState.append(thinking: response.thinking)
                         await onEvent(.thinking(response.thinking), runUUID)
                     }
                     if !response.content.isEmpty {
@@ -478,10 +499,20 @@ class Agent: Codable, @unchecked Sendable {
                             await onEvent(.agentState(.responding), runUUID)
                             self.state = .responding
                         }
+                        await streamTempState.append(content: response.content)
                         await onEvent(.content(response.content), runUUID)
                     }
                 }
             )
+            
+            if (Task.isCancelled) {
+                if let interrupted = await AgentUtilities.getRunCancelledMessage(runUUID: runUUID, streamState: streamTempState) {
+                    newMessages.append(interrupted)
+                }
+
+                history.append(contentsOf: newMessages)
+                return (newMessages, .ready)
+            }
             
             if let error = response.error {
                 let errorText = error.localizedDescription
@@ -490,10 +521,7 @@ class Agent: Codable, @unchecked Sendable {
                 let errorMessage = Message(runUUID: runUUID, role: MsgSource.assistant.name, text: ("Encountered LLM provider error: " + errorText))
                 newMessages.append(errorMessage)
                 history.append(contentsOf: newMessages)
-                
-                await onEvent(.agentState(.error), runUUID)
-                self.state = .error
-                return newMessages
+                return (newMessages, .error)
             }
             
             let responseMsg = Message.fromProvider(response, runUUID: runUUID)
@@ -503,10 +531,7 @@ class Agent: Codable, @unchecked Sendable {
             guard let toolCalls = responseMsg.toolCalls,
                   (!toolCalls.isEmpty) else {
                 history.append(contentsOf: newMessages)
-                
-                await onEvent(.agentState(.ready), runUUID)
-                self.state = .ready
-                return newMessages
+                return (newMessages, .ready)
             }
 
             pendingToolCalls = toolCalls
@@ -514,10 +539,7 @@ class Agent: Codable, @unchecked Sendable {
             iterations += 1
         }
         
-        await onEvent(.agentState(.ready), runUUID)
-        self.state = .ready
-        
-        return newMessages
+        return (newMessages, .ready)
     }
     
     private func runMemorySessionSummarizer(

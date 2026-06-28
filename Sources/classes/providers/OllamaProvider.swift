@@ -81,6 +81,8 @@ final class OllamaProvider: LLMProvider {
                     }
                 }
             }
+        } catch is CancellationError {
+            return ProviderResponse(createdAt: "", model: model.name, content: "")
         } catch {
             print("Provider error:", error)
             var errorResponse = response
