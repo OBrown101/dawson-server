@@ -344,9 +344,13 @@ class Agent: Codable, @unchecked Sendable {
                         // Need to execute original tool that requested permission (to prevent re-triggering request)
                         let toolOutput = await executeTool(tc)
                         messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: toolOutput, toolCallId: tc.id))
+                        
+                        if (tc.name == ReadImage().name),
+                           let imageMessage = await messageFromImageTC(runUUID: runUUID, toolCall: tc) {
+                            messages.append(imageMessage)
+                        }
                     } else {
-                        messages.append(
-                            Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse), toolCallId: tc.id))
+                        messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse), toolCallId: tc.id))
                     }
                 case .confirmation:
                     // Currently just inputs back into LLM, in future can be used for specific, binary requirements (not just approve/deny)
@@ -432,15 +436,9 @@ class Agent: Codable, @unchecked Sendable {
                 print("Calling tool: \(tc.name)...")
                 await onEvent(.toolCall(tc.name), runUUID)
                 
-                if (Task.isCancelled) {
-                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "Tool call cancelled before completion.", toolCallId: tc.id))
-                    continue
-                }
+                try Task.checkCancellation()
                 let result = await runTool(tc)
-                if (Task.isCancelled) {
-                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "Tool call cancelled before completion.", toolCallId: tc.id))
-                    continue
-                }
+                try Task.checkCancellation()
 
                 switch result {
                 case .completed(let output):
@@ -473,17 +471,19 @@ class Agent: Codable, @unchecked Sendable {
             }
             newMessages.append(contentsOf: toolResults)
 
-            var promptMessage = trimmedHistory
-            promptMessage = injectContextPrompts(promptMessage, runUUID: runUUID)
-            promptMessage.append(contentsOf: newMessages)
+            var promptMessages = trimmedHistory
+            promptMessages = injectContextPrompts(promptMessages, runUUID: runUUID)
+            promptMessages.append(contentsOf: newMessages)
+            promptMessages = repairInterruptedToolCalls(promptMessages, runUUID: runUUID)
             
             try Task.checkCancellation()
             
             let streamTempState = StreamTempState()
+            let availableTools = (self.mode == .egg) ? Agent.requiredTools : self.tools
             let response = await provider.send(
-                messages: promptMessage,
+                messages: promptMessages,
                 model: model,
-                tools: tools,
+                tools: availableTools,
                 useThinking: useThinking,
                 contextWindow: contextWindow,
                 onUpdate: { response in
@@ -509,15 +509,6 @@ class Agent: Codable, @unchecked Sendable {
             )
             
             if (Task.isCancelled) {
-                for index in pendingToolIndex..<pendingToolCalls.count {
-                    let tc = pendingToolCalls[index]
-
-                    let alreadyHasResult = newMessages.contains { ($0.role == MsgSource.tool.name) && ($0.toolCallId == tc.id) }
-                    if (!alreadyHasResult) {
-                        newMessages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "Tool call cancelled before completion.", toolCallId: tc.id))
-                    }
-                }
-                
                 if let interrupted = await AgentUtilities.getRunCancelledMessage(runUUID: runUUID, streamState: streamTempState) {
                     newMessages.append(interrupted)
                 }
@@ -561,6 +552,7 @@ class Agent: Codable, @unchecked Sendable {
     ) async {
         var summarizerMessages = messages
         summarizerMessages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: AgentUtilities.memorySessionPrompt))
+        summarizerMessages = repairInterruptedToolCalls(summarizerMessages, runUUID: runUUID)
 
         let response = await provider.send(
             messages: summarizerMessages,
@@ -596,6 +588,7 @@ class Agent: Codable, @unchecked Sendable {
             .filter { $0.role == MsgSource.user.name || $0.role == MsgSource.assistant.name }
             .suffix(recentMsgCnt)
         msgs.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: AgentUtilities.convSummaryPrompt))
+        msgs = repairInterruptedToolCalls(msgs, runUUID: runUUID)
         
         let response = await provider.send(
             messages: msgs,
@@ -853,5 +846,35 @@ extension Agent {
         } catch {
             return Message(runUUID: runUUID, role: MsgSource.user.name, text: "Failed to attach image for visual analysis: \(error.localizedDescription)")
         }
+    }
+    
+    private func repairInterruptedToolCalls(_ messages: [Message], runUUID: String) -> [Message] {
+        var repaired: [Message] = []
+        var openToolCallIds: [String: ToolCall] = [:]
+        
+        for message in messages {
+            if let toolCalls = message.toolCalls {
+                for tc in toolCalls {
+                    if let id = tc.id,
+                       (!id.isEmpty) {
+                        openToolCallIds[id] = tc
+                    }
+                }
+            }
+
+            if (message.role == MsgSource.tool.name),
+               let id = message.toolCallId,
+               !id.isEmpty {
+                openToolCallIds.removeValue(forKey: id)
+            }
+
+            repaired.append(message)
+        }
+
+        for tc in openToolCallIds.values {
+            repaired.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: "Tool call cancelled before completion.", toolCallId: tc.id))
+        }
+
+        return repaired
     }
 }
