@@ -75,6 +75,8 @@ class GetSessionInfo: ChatAware {
         ## Current Chat Session Information ##
         User UUID: \(chat.userUUID)
         Mode: \(agent.mode.rawValue)
+        Model: \(agent.model.name)
+        Model Provider: \(agent.model.provider.rawValue)
         Permissions:
             canRead: \(agent.mode.permissionDescription(for: .read))
             canWrite: \(agent.mode.permissionDescription(for: .write))

@@ -39,6 +39,21 @@ final class PythonEnv: @unchecked Sendable {
     static let pythonExecPath = pythonHome
         .appendingPathComponent("python.exe")
         .path
+    #elseif os(Linux)
+    static let pythonHome = DAWSON.root.appendingPathComponent("python-linux")
+    static let pythonLibPath = pythonHome
+        .appendingPathComponent("lib")
+        .appendingPathComponent("libpython\(pythonVersion).so")
+        .path
+    static let pythonPackagesPath = pythonHome
+        .appendingPathComponent("lib")
+        .appendingPathComponent("python\(pythonVersion)")
+        .appendingPathComponent("site-packages")
+        .path
+    static let pythonExecPath = pythonHome
+        .appendingPathComponent("bin")
+        .appendingPathComponent("python3")
+        .path
     #endif
     
     static func setEnv() {
@@ -53,7 +68,7 @@ final class PythonEnv: @unchecked Sendable {
 //        print("PYTHON_EXEC:", pythonExecPath)
         
         
-        #if os(macOS)
+        #if os(macOS) || os(Linux)
         setenv("PYTHON_LIBRARY", pythonLibPath, 1)
         setenv("PYTHONHOME", pythonHome.path, 1)
         setenv("PYTHONPATH", pythonPackagesPath, 1)

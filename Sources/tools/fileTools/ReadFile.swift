@@ -9,7 +9,7 @@ import Foundation
 
 class ReadFile: PermissionAware {
     let name = "read_file"
-    let description = "Reads a file. Optionally reads only a specific line range and can prefix lines with line numbers. Returns the file path and visible line range. If file is long, read only the specific line range of interest."
+    let description = "Reads a file at an exact path. The path must be an absolute path or a valid path relative to the current working directory. Do not pass only a filename like README.md or main.swift unless that exact relative path is known to exist. Use find_file first to locate files by name, then pass the returned absolute path to read_file. This tool can also read only a specific line range and can prefix lines with line numbers. Returns the file path and visible line range. If file is long, read only the specific line range of interest."
     
     private let maxFileSize = 500_000  // 500KB limit
     private let maxLinesWithoutRange = 100  // If no range specified, max 100 lines
