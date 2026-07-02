@@ -16,7 +16,7 @@ DAWSON is a self-hosted, open-source agent harness, developed with the goal of b
 
 The objective isn't to reinvent the wheel, but rather to introduce new ways of interacting with your system, data, and favorite local and frontier models.
 
-DAWSON is designed to be a simple but useful system that provides configurable host access throughout conversations, opens up the memory "black box", and gives both users and contributors a clean companion application (**Beakshield**) to work with.
+DAWSON is designed to be a simple but useful system that provides configurable host access throughout conversations, opens up the memory "black box", and gives both users and contributors a clean companion application (https://github.com/OBrown101/beakshield) to work with.
 
 ---
 
