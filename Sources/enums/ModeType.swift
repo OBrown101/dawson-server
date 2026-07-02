@@ -7,11 +7,15 @@
 
 import Foundation
 
-enum ModeType: String, Codable {
+enum ModeType: String, Codable, CaseIterable {
     case egg = "EGG"
     case fledgling = "FLEDGLING"
     case warrior = "WARRIOR"
     case ultimate = "ULTIMATE"
+    
+    static func fromName(_ name: String) -> ModeType? {
+        return ModeType.allCases.first(where: { $0.rawValue == name })
+    }
 }
 
 extension ModeType {

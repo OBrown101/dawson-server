@@ -8,7 +8,7 @@
 import Foundation
 
 final class Grep: PermissionAware {
-    let name = "grep"
+    let name = "grep_search"
     let description = "Safely searches inside text files under a permitted file or directory. Returns matching lines with absolute file paths and line numbers. Use find_file when searching filenames instead."
 
     private static let defaultMaxResults = 100

@@ -97,7 +97,7 @@ final class AnthropicProvider: LLMProvider {
                         response.content += text
                         await onUpdate(chunkResponse)
                     } else if (deltaType == "input_json_delta"),
-                              let jsonDelta = delta["input_json"] as? String {
+                              let jsonDelta = delta["partial_json"] as? String {
                         currentToolInput += jsonDelta
                     }
                     

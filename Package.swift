@@ -10,7 +10,6 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/Flight-School/AnyCodable", .upToNextMajor(from: "0.6.7")),
-        .package(url: "https://github.com/stephencelis/SQLite.swift", .upToNextMajor(from: "0.14.1")),
         .package(url: "https://github.com/vapor/vapor.git", from: "4.76.0"),
         .package(url: "https://github.com/pvieito/PythonKit.git", branch: "master"),
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.11.0")
@@ -22,7 +21,6 @@ let package = Package(
             name: "DAWSON",
             dependencies: [
                 .product(name: "AnyCodable", package: "AnyCodable"),
-                .product(name: "SQLite", package: "SQLite.swift"),
                 .product(name: "Vapor", package: "vapor"),
                 .product(name: "PythonKit", package: "pythonkit"),
                 .product(name: "MCP", package: "swift-sdk")

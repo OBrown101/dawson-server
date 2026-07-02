@@ -11,7 +11,7 @@ class AgentHandler: @unchecked Sendable {
     static let shared = AgentHandler()
     
     static let defaultThoughtWindow = 0
-    static let defaultContextWindow: Int32 = 64_000
+    static let defaultContextWindow: Int32 = 128_000
     
     private var activeAgents: [String: Agent] = [:]
 

@@ -65,7 +65,7 @@ class Agent: Codable, @unchecked Sendable {
     static let agentsHistoryDirectory = agentsDirectory.appendingPathComponent("history")
     
     static var optionalTools: [Tool] {
-        return [Grep(), Tree(), ReadImage(), ReadPDF(), WriteFile(), SearchFile(), FindFile(), ReplaceInFile(), ReadFile(), ListFiles(), Speak(), RichFormatter(), ReadPDF()]
+        return [Grep(), Tree(), ReadImage(), WriteFile(), SearchFile(), FindFile(), ReplaceInFile(), ReadFile(), ListFiles(), Speak(), RichFormatter(), ReadPDF()]
     }
     static var requiredTools: [Tool] {
         [RequestUserInput(), EnvAwareness(), GetFullSkill(), GetSessionInfo()] + Agent.memoryTools

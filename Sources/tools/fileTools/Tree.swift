@@ -8,7 +8,7 @@
 import Foundation
 
 final class Tree: PermissionAware {
-    let name = "tree"
+    let name = "directory_tree"
     let description = "Shows a compact directory tree for a known directory. Use this to understand project structure without listing every file recursively."
 
     private static let defaultMaxEntries = 300
