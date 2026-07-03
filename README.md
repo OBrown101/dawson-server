@@ -4,7 +4,7 @@
 
 
 # DAWSON
-### Digital Assistant Working Safely Offline
+### Digital Assistant Working Safely Offline\*
 
 *A self-hosted AI orchestration platform focused on peristant and controllable knowledge, agent collaboration, and safe local automation.*
 
@@ -12,11 +12,25 @@
 
 ## What is DAWSON?
 
+<table>
+<tr>
+<td width="18%" align="center" valign="middle">
+
+<img src="assets/screenshots/dawson-working.png" alt="Dawson-profile" width="100%">
+
+</td>
+
+<td width="82%" valign="top">
+
 DAWSON is a self-hosted, open-source agent harness, developed with the goal of being self-contained, portable, safe, and usable on macOS, Windows, Linux systems.
 
 The objective isn't to reinvent the wheel, but rather to introduce new ways of interacting with your system, data, and favorite local and frontier models.
 
-DAWSON is designed to be a simple but useful system that provides configurable host access throughout conversations, opens up the memory "black box", and gives both users and contributors a clean companion application (https://github.com/OBrown101/beakshield) to work with.
+DAWSON is designed to be a simple but useful system that provides configurable host access throughout conversations, opens up the memory "black box", and gives both users and contributors a clean companion application (<a href="https://github.com/OBrown101/beakshield">Beakshield</a>) to work with.
+
+</td>
+</tr>
+</table>
 
 ---
 
@@ -47,6 +61,10 @@ Each item is marked with its current implementation status.
 
 ---
 
+<table>
+<tr>
+<td width="82%" valign="top">
+
 ## 🦉 A Persistent Orchestrator *[In-Progress]*
 
 At the center of every DAWSON installation is **Dawson** himself.
@@ -55,13 +73,43 @@ Unlike chat-specific agents, Dawson is intended to be a persistent orchestrator 
 
 While Squirebots (regular chat agents) are robotic and direct in their nature, Dawson is designed to be more conversational, helping refine ideas, coordinate work, and oversee the kingdom as a whole.
 
+</td>
+
+<td width="18%" align="center" valign="middle">
+
+<img src="assets/screenshots/dawson-profile.png" alt="Dawson-profile" width="100%">
+
+</td>
+</tr>
+</table>
+
 ---
 
 ## ⚔ Dedicated Chats/Agents *[Working]*
 
+<table>
+<tr>
+<td width="82%" valign="top">
+
 Each conversation creates its own dedicated **Squirebot**.
 
 Squirebots are intentionally direct and task-focused. Their job is to answer questions, complete work, and contribute useful knowledge back to the shared palace.
+
+</td>
+
+<td width="18%" align="center" valign="middle">
+
+<img src="assets/screenshots/squirebot-profile.png" alt="Dawson-profile" width="100%">
+
+</td>
+</tr>
+</table>
+
+
+
+
+
+
 
 ---
 
@@ -147,6 +195,10 @@ Future updates will introduce:
 - Skills library
 - User profiles
 - Live agent monitoring
+
+<p align="center">
+  <img src="assets/screenshots/MainScreen.png" width="700">
+</p>
 
 ---
 
