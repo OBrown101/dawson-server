@@ -18,7 +18,7 @@
      alt="Dawson profile"
      style="margin-right: 20px;">
 
-DAWSON is a self-hosted, open-source agent harness, developed with the goal of being self-contained, portable, safe, and usable on macOS, Windows, Linux systems.
+DAWSON is a self-hosted, open-source agent harness, developed with the goal of being self-contained, portable, safe, and usable on macOS and Linux systems.
 
 The objective isn't to reinvent the wheel, but rather to introduce new ways of interacting with your system, data, and favorite local and frontier models.
 
