@@ -9,11 +9,13 @@ import Foundation
 
 final class Grep: PermissionAware {
     let name = "grep_search"
-    let description = "Safely searches inside text files under a permitted file or directory. Returns matching lines with absolute file paths and line numbers. Use find_file when searching filenames instead."
+    let description = "Searches inside text files under a permitted file or directory. Returns matching lines with absolute file paths and line numbers; set context_lines to also see surrounding lines. Use find_file when searching filenames instead."
 
     private static let defaultMaxResults = 100
     private static let hardMaxResults = 1000
     private static let maxFileSize = 1_000_000
+    private static let maxContextLines = 5
+    private static let maxLineLength = 300
 
     private let defaultExcludedDirectories: Set<String> = [
         ".git", ".build", "build", "DerivedData", "node_modules", ".gradle", ".idea", ".swiftpm"
@@ -66,6 +68,11 @@ final class Grep: PermissionAware {
                     "description": "Whether to include hidden files and directories",
                     "default": false
                 ],
+                "context_lines": [
+                    "type": "integer",
+                    "description": "Lines of surrounding context to show before and after each match (0-\(maxContextLines))",
+                    "default": 0
+                ],
                 "max_results": [
                     "type": "integer",
                     "description": "Maximum number of matching lines to return",
@@ -73,7 +80,7 @@ final class Grep: PermissionAware {
                 ]
             ]
         ]
-    
+
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
@@ -112,11 +119,16 @@ final class Grep: PermissionAware {
         let caseSensitive = args["case_sensitive"] as? Bool ?? false
         let includeHidden = args["include_hidden"] as? Bool ?? false
         let useRegex = args["regex"] as? Bool ?? false
+        let contextLines = min(Grep.maxContextLines, max(0, args["context_lines"] as? Int ?? 0))
         let maxResults = min(Grep.hardMaxResults, max(1, args["max_results"] as? Int ?? Grep.defaultMaxResults))
         let extensions = normalizedExtensions(args["extensions"] as? [String])
         let excludedDirectories = normalizedExcludedDirectories(args["exclude_directories"] as? [String])
 
         let rootURL = URL(fileURLWithPath: path).standardizedFileURL
+
+        guard FileManager.default.fileExists(atPath: rootURL.path) else {
+            return "Error: Path not found at '\(rootURL.path)'. Use find_file or directory_tree to locate the correct path."
+        }
 
         do {
             let rootValues = try rootURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey])
@@ -136,12 +148,13 @@ final class Grep: PermissionAware {
             }
 
             let regex = try makeRegex(pattern: pattern, useRegex: useRegex, caseSensitive: caseSensitive)
-            var matches: [String] = []
+            var output: [String] = []
+            var matchCount = 0
             var searchedFiles = 0
             var skippedFiles = 0
 
             for fileURL in files {
-                guard (matches.count < maxResults) else { break }
+                guard (matchCount < maxResults) else { break }
 
                 if shouldSkipFile(fileURL, extensions: extensions, includeHidden: includeHidden) {
                     skippedFiles += 1
@@ -162,17 +175,46 @@ final class Grep: PermissionAware {
                 searchedFiles += 1
                 let lines = text.components(separatedBy: .newlines)
 
+                // Pass 1: find matching line indices (respecting the budget).
+                var matchIndices: [Int] = []
                 for (index, line) in lines.enumerated() {
-                    guard (matches.count < maxResults) else { break }
+                    guard (matchCount < maxResults) else { break }
 
                     let range = NSRange(line.startIndex..<line.endIndex, in: line)
                     if (regex.firstMatch(in: line, range: range) != nil) {
-                        matches.append("\(fileURL.path):\(index + 1): \(line)")
+                        matchIndices.append(index)
+                        matchCount += 1
+                    }
+                }
+
+                guard (!matchIndices.isEmpty) else { continue }
+
+                // Pass 2: render, with optional surrounding context.
+                if (contextLines == 0) {
+                    for index in matchIndices {
+                        output.append("\(fileURL.path):\(index + 1): \(truncate(lines[index]))")
+                    }
+                } else {
+                    var lastPrinted = -2
+                    for index in matchIndices {
+                        let blockStart = max(0, index - contextLines)
+                        let blockEnd = min(lines.count - 1, index + contextLines)
+
+                        if (blockStart > lastPrinted + 1 && lastPrinted >= 0) {
+                            output.append("--")
+                        }
+
+                        for lineIndex in max(blockStart, lastPrinted + 1)...blockEnd {
+                            let marker = matchIndices.contains(lineIndex) ? ":" : "-"
+                            output.append("\(fileURL.path):\(lineIndex + 1)\(marker) \(truncate(lines[lineIndex]))")
+                        }
+
+                        lastPrinted = max(lastPrinted, blockEnd)
                     }
                 }
             }
 
-            if (matches.isEmpty) {
+            if (output.isEmpty) {
                 return """
                 No matches found.
 
@@ -183,23 +225,28 @@ final class Grep: PermissionAware {
                 """
             }
 
-            var output = """
+            var result = """
             Matches for "\(pattern)"
             Path: \(rootURL.path)
             Files searched: \(searchedFiles)
             Files skipped: \(skippedFiles)
 
-            \(matches.joined(separator: "\n"))
+            \(output.joined(separator: "\n"))
             """
 
-            if (matches.count >= maxResults) {
-                output += "\n\nResult truncated after \(maxResults) matches. Increase max_results or narrow the search."
+            if (matchCount >= maxResults) {
+                result += "\n\nResult truncated after \(maxResults) matches. Increase max_results or narrow the search."
             }
 
-            return output
+            return result
         } catch {
             return "Error searching files: \(error.localizedDescription)"
         }
+    }
+
+    private func truncate(_ line: String) -> String {
+        guard (line.count > Grep.maxLineLength) else { return line }
+        return line.prefix(Grep.maxLineLength) + " …[line truncated]"
     }
 
     private func collectFiles(
@@ -251,8 +298,9 @@ final class Grep: PermissionAware {
     }
 
     private func shouldSkipFile(_ url: URL, extensions: Set<String>?, includeHidden: Bool) -> Bool {
-        if (!includeHidden && url.lastPathComponent.hasPrefix(".")),
-           let extensions = extensions,
+        if (!includeHidden && url.lastPathComponent.hasPrefix(".")) { return true }
+
+        if let extensions = extensions,
            (!extensions.contains(url.pathExtension.lowercased())) { return true }
 
         return false

@@ -9,59 +9,57 @@ import Foundation
 
 class WriteFile: PermissionAware {
     let name = "write_file"
-    
+
+    private let toolDescription = """
+        Writes content to a file at the specified path, creating parent \
+        directories as needed. If the file already exists its ENTIRE content is \
+        replaced — to modify part of an existing file, use replace_in_file \
+        instead of rewriting the whole file.
+        """
+
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
-        guard let path = args["path"] as? String, !path.isEmpty else { return []}
-        
+        guard let path = args["path"] as? String, !path.isEmpty else { return [] }
+
+        if FileManager.default.fileExists(atPath: path) {
+            return [
+                PermissionRequest(action: .write, target: path, requirement: .userApproval, reason: "Overwrite existing file at '\(path)' (all previous content will be replaced).")
+            ]
+        }
+
         return [
             PermissionRequest(action: .write, target: path)
         ]
     }
-    
+
+    private let parametersSchema: [String: Any] = [
+        "type": "object",
+        "required": ["path", "content"],
+        "properties": [
+            "path": [
+                "type": "string",
+                "description": "The full path of the file to write"
+            ],
+            "content": [
+                "type": "string",
+                "description": "The text content to write to the file"
+            ]
+        ]
+    ]
+
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
             "name": name,
-            "description": """
-            Writes content to a file at the specified path. Overwrites existing content if the file exists. Used for writing to any file.
-            """,
-            "parameters": [
-                "type": "object",
-                "properties": [
-                    "path": [
-                        "type": "string",
-                        "description": "The full path of the file to write"
-                    ],
-                    "content": [
-                        "type": "string",
-                        "description": "The text content to write to the file"
-                    ]
-                ],
-                "required": ["path", "content"]
-            ]
+            "description": toolDescription,
+            "parameters": parametersSchema
         ]
     }
-    
+
     func anthropicSchema() -> [String : Any] {
         return [
             "name": name,
-            "description": """
-            Writes content to a file at the specified path. Overwrites existing content if the file exists. Used for writing to any file.
-            """,
-            "input_schema": [
-                "type": "object",
-                "properties": [
-                    "path": [
-                        "type": "string",
-                        "description": "The full path of the file to write"
-                    ],
-                    "content": [
-                        "type": "string",
-                        "description": "The text content to write to the file"
-                    ]
-                ],
-                "required": ["path", "content"]
-            ]
+            "description": toolDescription,
+            "input_schema": parametersSchema
         ]
     }
 
@@ -70,21 +68,8 @@ class WriteFile: PermissionAware {
             "type": "function",
             "function": [
                 "name": name,
-                "description": "Writes content to a file at the specified path. Overwrites existing content if the file exists. Used for writing to any file.",
-                "parameters": [
-                    "type": "object",
-                    "required": ["path", "content"],
-                    "properties": [
-                        "path": [
-                            "type": "string",
-                            "description": "The full path of the file to write"
-                        ],
-                        "content": [
-                            "type": "string",
-                            "description": "The text content to write to the file"
-                        ]
-                    ]
-                ]
+                "description": toolDescription,
+                "parameters": parametersSchema
             ]
         ]
     }
@@ -96,11 +81,26 @@ class WriteFile: PermissionAware {
         guard let content = args["content"] as? String else {
             return "Error: No content provided."
         }
-        
+
         do {
             let fileURL = URL(fileURLWithPath: path)
+            let existed = FileManager.default.fileExists(atPath: path)
+            let previousSize = existed
+                ? ((try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+                : 0
+
+            try FileManager.default.createDirectory(
+                at: fileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
-            return "Successfully wrote to \(path)"
+
+            let lineCount = content.components(separatedBy: .newlines).count
+            if (existed) {
+                return "Overwrote \(path) (was \(previousSize) bytes; now \(content.utf8.count) bytes, \(lineCount) lines). All previous content was replaced."
+            }
+            return "Created \(path) (\(content.utf8.count) bytes, \(lineCount) lines)."
         } catch let error {
             return "Error writing file at \(path): \(error.localizedDescription)"
         }

@@ -118,35 +118,40 @@ class ImageProcessor: @unchecked Sendable {
         }
         
         #if os(macOS)
-        // macOS with AppKit support for native image handling
         guard let image = NSImage(data: imageData) else {
             throw ImageProcessorError.invalidImageFormat
         }
-        
-        // Resize image to reduce file size
-        let resizedImage = resizeImageMacOS(image, maxBytes: maxBytes)
-        
-        // Re-encode with compression
-        guard let tiffData = resizedImage.tiffRepresentation else {
-            throw ImageProcessorError.compressionFailed
-        }
-        
-        if (mimeType == "image/jpeg") {
-            guard let bitmapImage = NSBitmapImageRep(data: tiffData),
-                  let jpegData = bitmapImage.representation(using: .jpeg, properties: [.compressionFactor: 0.7]) else {
-                throw ImageProcessorError.compressionFailed
+
+        // Prefer reducing quality over shrinking dimensions first: detail-heavy images
+        // (schematics, diagrams, screenshots with text) become unreadable once downscaled,
+        // so we only touch dimensions as a last resort.
+        let qualitySteps: [CGFloat] = [0.85, 0.7, 0.55, 0.4]
+        for quality in qualitySteps {
+            if let data = encodeImageMacOS(image, mimeType: mimeType, scale: 1.0, quality: quality),
+               data.count <= maxBytes {
+                return data
             }
-            return jpegData
-        } else if (mimeType == "image/png") {
-            guard let bitmapImage = NSBitmapImageRep(data: tiffData),
-                  let pngData = bitmapImage.representation(using: .png, properties: [:]) else {
-                throw ImageProcessorError.compressionFailed
-            }
-            return pngData
         }
-        
-        return imageData
-        
+
+        // Still too large at full resolution even at low quality: downscale gradually,
+        // but stop at 40% linear size rather than crushing it down to a sliver.
+        var scale: CGFloat = 0.9
+        var bestEffort: Data?
+        while scale > 0.4 {
+            if let data = encodeImageMacOS(image, mimeType: mimeType, scale: scale, quality: 0.6) {
+                bestEffort = data
+                if data.count <= maxBytes {
+                    return data
+                }
+            }
+            scale -= 0.1
+        }
+
+        if let bestEffort = bestEffort {
+            return bestEffort
+        }
+        throw ImageProcessorError.compressionFailed
+
         #else
         // Linux or other platforms without native image libraries
         // Compression not supported; let caller handle gracefully
@@ -155,26 +160,27 @@ class ImageProcessor: @unchecked Sendable {
     }
     
     #if os(macOS)
-    private func resizeImageMacOS(_ image: NSImage, maxBytes: Int) -> NSImage {
-        var scale: CGFloat = 1.0
+    private func encodeImageMacOS(_ image: NSImage, mimeType: String, scale: CGFloat, quality: CGFloat) -> Data? {
         let currentSize = image.size
-        
-        // Progressive scaling: reduce dimensions until estimated size is below threshold
-        while currentSize.width * currentSize.height * scale > CGFloat(maxBytes / 1000) && scale > 0.1 {
-            scale *= 0.8
-        }
-        
         let newSize = NSSize(width: currentSize.width * scale, height: currentSize.height * scale)
+
         let resizedImage = NSImage(size: newSize)
-        
         resizedImage.lockFocus()
         image.draw(in: NSRect(origin: .zero, size: newSize),
-                   from: NSRect(origin: .zero, size: image.size),
+                   from: NSRect(origin: .zero, size: currentSize),
                    operation: .copy,
                    fraction: 1.0)
         resizedImage.unlockFocus()
-        
-        return resizedImage
+
+        guard let tiffData = resizedImage.tiffRepresentation,
+              let bitmapImage = NSBitmapImageRep(data: tiffData) else {
+            return nil
+        }
+
+        if mimeType == "image/png" {
+            return bitmapImage.representation(using: .png, properties: [:])
+        }
+        return bitmapImage.representation(using: .jpeg, properties: [.compressionFactor: quality])
     }
     #endif
 }

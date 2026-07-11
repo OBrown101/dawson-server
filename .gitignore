@@ -32,6 +32,7 @@ python/pytest_cache/*
 # DAWSON specific (workspace root)
 databank/*
 .mempalace/*
+config.properties
 CLAUDE.md
 DAWSON.md
 

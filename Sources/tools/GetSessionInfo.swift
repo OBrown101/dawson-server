@@ -5,6 +5,8 @@
 //  Created by Ethan Brown on 5/20/26.
 //
 
+import Foundation
+
 class GetSessionInfo: ChatAware {
     let name = "get_session_info"
     
@@ -71,8 +73,17 @@ class GetSessionInfo: ChatAware {
             limitString = String(limit)
         }
         
+        let now = Date()
+        let timeFormatter = DateFormatter()
+        let dateFormatter = DateFormatter()
+        timeFormatter.dateStyle = .none
+        timeFormatter.timeStyle = .medium
+        dateFormatter.dateFormat = "EEEE, MMMM d, yyyy"
+        
         return """
         ## Current Chat Session Information ##
+        Current Time: \(timeFormatter.string(from: now))
+        Current Date: \(dateFormatter.string(from: now))
         User UUID: \(chat.userUUID)
         Mode: \(agent.mode.rawValue)
         Model: \(agent.model.name)

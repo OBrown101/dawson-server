@@ -9,9 +9,14 @@ import Foundation
 
 class FindFile: PermissionAware {
     let name = "find_file"
-    let description = "Finds files or directories by name under a root path. Use this when looking for filenames or directory names such as README.md, *.kt, build.gradle.kts, App.swift, or ViewModel.kt. This does not search file contents. Returns absolute paths."
-    
-    private let maxFindResults = 50
+    let description = "Finds files or directories by name under a root path. Use this when looking for filenames or directory names such as README.md, *.kt, build.gradle.kts, App.swift, or ViewModel.kt. The pattern must match the WHOLE name (use * wildcards for partial matches, e.g. *Handler*). This does not search file contents — use grep_search for that. Returns absolute paths. Skips common build/dependency directories (.git, node_modules, build, etc.) by default."
+
+    private static let defaultMaxResults = 50
+    private static let hardMaxResults = 200
+
+    private let defaultExcludedDirectories: Set<String> = [
+        ".git", ".build", "build", "DerivedData", "node_modules", ".gradle", ".idea", ".swiftpm"
+    ]
 
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
         guard let path = args["path"] as? String,
@@ -37,7 +42,7 @@ class FindFile: PermissionAware {
                     ],
                     "pattern": [
                         "type": "string",
-                        "description": "Filename or directory name pattern to search for. Supports simple wildcard *."
+                        "description": "Filename or directory name pattern. Matches the whole name; supports * wildcards (e.g. *.swift, *ViewModel*)."
                     ],
                     "include_directories": [
                         "type": "boolean",
@@ -56,8 +61,8 @@ class FindFile: PermissionAware {
                     ],
                     "max_results": [
                         "type": "integer",
-                        "description": "Maximum number of results to return",
-                        "default": 100
+                        "description": "Maximum number of results to return (up to \(FindFile.hardMaxResults))",
+                        "default": FindFile.defaultMaxResults
                     ]
                 ]
             ]
@@ -95,7 +100,7 @@ class FindFile: PermissionAware {
         let includeDirectories = args["include_directories"] as? Bool ?? false
         let caseSensitive = args["case_sensitive"] as? Bool ?? false
         let includeHidden = args["include_hidden"] as? Bool ?? false
-        let maxResults = min(maxFindResults, max(1, args["max_results"] as? Int ?? maxFindResults))
+        let maxResults = min(FindFile.hardMaxResults, max(1, args["max_results"] as? Int ?? FindFile.defaultMaxResults))
 
         do {
             let rootURL = URL(fileURLWithPath: path)
@@ -119,6 +124,12 @@ class FindFile: PermissionAware {
 
             while let item = enumerator.nextObject() as? URL {
                 let values = try item.resourceValues(forKeys: [.isDirectoryKey, .isHiddenKey])
+                let name = item.lastPathComponent
+
+                if (values.isDirectory == true && defaultExcludedDirectories.contains(name)) {
+                    enumerator.skipDescendants()
+                    continue
+                }
 
                 if (!includeHidden && (values.isHidden ?? false)) {
                     if (values.isDirectory == true) {
@@ -129,7 +140,6 @@ class FindFile: PermissionAware {
 
                 if ((values.isDirectory == true) && !includeDirectories) { continue }
 
-                let name = item.lastPathComponent
                 let range = NSRange(name.startIndex..<name.endIndex, in: name)
 
                 if regex.firstMatch(in: name, range: range) != nil {
@@ -143,10 +153,10 @@ class FindFile: PermissionAware {
             }
 
             if results.isEmpty {
-                return "No matching files found."
+                return "No files matching '\(pattern)' found under \(rootURL.path). The pattern must match the whole name — try a broader wildcard pattern like *\(pattern)* or search a higher-level directory."
             }
 
-            let truncated = totalMatches > maxResults ? "\n(Showing \(maxResults) of \(totalMatches) results. Narrow your search pattern.)" : ""
+            let truncated = totalMatches > maxResults ? "\n(Showing \(maxResults) of \(totalMatches)+ results. Narrow your search pattern.)" : ""
             return results.joined(separator: "\n") + truncated
         } catch {
             return "Error finding files: \(error.localizedDescription)"

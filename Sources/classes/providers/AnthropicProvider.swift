@@ -164,12 +164,12 @@ final class AnthropicProvider: LLMProvider {
 extension AnthropicProvider {
     private func toAnthropicMessages(_ messages: [Message]) -> [[String: Any]] {
         var result: [[String: Any]] = []
-
+        
         for message in messages {
             if message.role == MsgSource.system.name {
                 continue
             }
-
+            
             if let toolCalls = message.toolCalls,
                !toolCalls.isEmpty {
                 result.append([
@@ -185,7 +185,7 @@ extension AnthropicProvider {
                 ])
                 continue
             }
-
+            
             if message.role == MsgSource.tool.name {
                 result.append([
                     "role": MsgSource.user.name,
@@ -199,9 +199,9 @@ extension AnthropicProvider {
                 ])
                 continue
             }
-
+            
             var contentArray: [[String: Any]] = []
-
+            
             if let text = message.text,
                !text.isEmpty {
                 contentArray.append([
@@ -209,7 +209,7 @@ extension AnthropicProvider {
                     "text": text
                 ])
             }
-
+            
             if let attachments = message.attachments,
                !attachments.isEmpty {
                 for attachment in attachments {
@@ -228,13 +228,51 @@ extension AnthropicProvider {
                     }
                 }
             }
-
+            
             result.append([
                 "role": message.role == MsgSource.assistant.name ? MsgSource.assistant.name : MsgSource.user.name,
                 "content": contentArray.isEmpty ? "" : contentArray
             ])
         }
-
-        return result
+        
+        return mergeConsecutiveUserMessages(result)
+    }
+    
+    private func mergeConsecutiveUserMessages(_ messages: [[String: Any]]) -> [[String: Any]] {
+        /*
+         Anthropic requires each tool_use to be followed by exactly one user turn containing
+         its tool_result. Some flows (e.g. ReadImage) append the tool_result and a follow-up
+         image as two separate "user" messages, which produces two consecutive user turns and
+         trips the API's tool_use/tool_result pairing check. Merge them into a single turn.
+         */
+        
+        var merged: [[String: Any]] = []
+ 
+        for message in messages {
+            guard let role = message["role"] as? String,
+                  (role == MsgSource.user.name),
+                  let lastIndex = merged.indices.last,
+                  ((merged[lastIndex]["role"] as? String) == MsgSource.user.name) else {
+                merged.append(message)
+                continue
+            }
+ 
+            var lastContent = asContentBlocks(merged[lastIndex]["content"])
+            lastContent.append(contentsOf: asContentBlocks(message["content"]))
+            merged[lastIndex]["content"] = lastContent
+        }
+ 
+        return merged
+    }
+ 
+    private func asContentBlocks(_ content: Any?) -> [[String: Any]] {
+        if let blocks = content as? [[String: Any]] {
+            return blocks
+        }
+        if let text = content as? String,
+           (!text.isEmpty) {
+            return [["type": "text", "text": text]]
+        }
+        return []
     }
 }
