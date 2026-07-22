@@ -146,7 +146,7 @@ class InstallPythonPackage: PermissionAware {
 
         return """
         Installed '\(package)' into DAWSON's Python environment. It is immediately \
-        importable in run_python_script calls (the runtime is mounted read-only \
+        importable in \(RunPythonScript.name) calls (the runtime is mounted read-only \
         into the sandbox, so new packages are visible without any restart).
         \(Self.tail(result.stdout, lines: 5))
         """

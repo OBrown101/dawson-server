@@ -21,9 +21,7 @@ class RunPythonScript: PermissionAware {
     }
     
     func permissionRequests(args: [String: Any]) -> [PermissionRequest] {
-        return [
-            PermissionRequest(action: .all)
-        ]
+        return [PermissionRequest(action: .write, target: workspace().first)]
     }
     
     private var toolDescription: String {

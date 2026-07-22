@@ -8,20 +8,24 @@
 import Foundation
 
 final class CommandClassifier {
-    // Determines which commands are safe, denied, require user (one-time per workspace) approval
+    // Determines which commands are read, write, denied, require user (one-time per workspace) approval
     // Classifier determines based on command intent, all still require running in a sandbox
     
     private init() {}
-
-    // Unambiguously benign: inspect/read/build/test. No approval in Warrior.
-    static let safeExecutables: Set<String> = [
+    
+    static let readExecutables: Set<String> = [
         "ls", "cat", "grep", "egrep", "fgrep", "find", "wc", "head", "tail",
         "echo", "pwd", "tree", "file", "stat", "du", "df", "diff", "sort",
-        "uniq", "cut", "awk", "sed", "which", "basename", "dirname", "realpath",
-        "swift", "swiftc", "node", "npm", "npx", "python3", "cargo", "rustc",
-        "make", "cmake", "go", "javac", "java", "kotlin", "gradle", "date", "env"
+        "uniq", "cut", "awk", "which", "basename", "dirname", "realpath",
+        "date", "env"
     ]
-
+    
+    static let writeExecutables: Set<String> = [
+        "sed", "swift", "swiftc", "node", "npm", "npx", "python3",
+        "cargo", "rustc", "make", "cmake", "go", "javac", "java",
+        "kotlin", "gradle", "tar", "zip", "unzip", "cp", "mv", "mkdir", "touch"
+    ]
+    
     // Bad-intent signals: refused below Ultimate (even sandboxed).
     // Privilege escalation, destructive ops, network fetch-and-exec, and package
     // managers (which route through .install instead).
@@ -52,9 +56,9 @@ final class CommandClassifier {
         "halt": "system control",
         "pip": "package install (use install_python_package)",
         "pip3": "package install (use install_python_package)",
-        "brew": "package install (use the install action)",
-        "apt": "package install (use the install action)",
-        "apt-get": "package install (use the install action)",
+        "brew": "package install",
+        "apt": "package install",
+        "apt-get": "package install",
         "yum": "package install",
         "dnf": "package install",
         "pacman": "package install",
@@ -62,25 +66,20 @@ final class CommandClassifier {
         "cargo-install": "package install"
     ]
 
-    // Read-only git subcommands are safe; mutating git is prompt-level.
-    static let safeGitSubcommands: Set<String> = [
+    // Read-only git subcommands are observes
+    // Everything else mutating git is a write (commit/push/checkout/etc)
+    static let readGitSubcommands: Set<String> = [
         "status", "diff", "log", "show", "branch", "remote", "ls-files",
         "blame", "rev-parse", "describe", "config"
     ]
 
     static func classify(_ command: String, userAllowed: Set<String>) -> CommandClass {
-        // Classifies full command string.
-        // `userAllowed` is per-user learned allowlist (grown by "always allow" approvals).
-        
         let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (!trimmed.isEmpty) else {
             return .denied(reason: "empty command")
         }
 
-        // Refuse shell metacharacters that chain/obfuscate. These don't defeat
-        // the sandbox, but a command using them can't be meaningfully
-        // classified by its first token, so it must go through prompt-level
-        // review at minimum — and pipes into shells are a denial.
+        // Pipe-into-shell and chained-sudo can't be classified by first token.
         let dangerousChains = ["| sh", "|sh", "| bash", "|bash", "&& sudo", "; sudo"]
         for pattern in dangerousChains where trimmed.contains(pattern) {
             return .denied(reason: "pipes command into a shell")
@@ -95,16 +94,21 @@ final class CommandClassifier {
 
         if (exe == "git") {
             let tokens = trimmed.split(separator: " ").map(String.init)
-            if (tokens.count > 1 && safeGitSubcommands.contains(tokens[1])) {
-                return .safe
+            if (tokens.count > 1 && readGitSubcommands.contains(tokens[1])) {
+                return .read
             }
-            return .prompt   // git commit/push/etc — one approval, sandboxed
+            return .write   // commit/push/checkout — mutating, one approval in Fledgling
         }
 
-        if (safeExecutables.contains(exe) || userAllowed.contains(exe)) {
-            return .safe
+        if (readExecutables.contains(exe)) {
+            return .read
         }
 
-        return .prompt   // unknown: contained by sandbox, gets one approval
+        // User-taught allowlist grants observe-level trust to a named exe.
+        if (writeExecutables.contains(exe) || userAllowed.contains(exe)) {
+            return .write
+        }
+
+        return .prompt   // unknown: force explicit approval, then run sandboxed
     }
 }

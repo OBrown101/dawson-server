@@ -11,8 +11,6 @@ enum ModeAction: String, Codable {
     case all
     case read
     case write
-    case command
-    case sudo
     case delegate
     case install
     case web

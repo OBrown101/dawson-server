@@ -22,16 +22,14 @@ class RunPythonCode: PermissionAware {
 
     var scratchRetentionDays: Int = 7   // Scratch snippets older than this are deleted on each call
 
-    static let scratchFolderName = "dawson_scratch"
+    static let scratchFolderName = ".dawson_scratch"
 
     init(workspace: @escaping () -> [String]) {
         self.workspace = workspace
     }
 
     func permissionRequests(args: [String: Any]) -> [PermissionRequest] {
-        return [
-            PermissionRequest(action: .all)
-        ]
+        return [PermissionRequest(action: .write, target: workspace().first)]
     }
 
     private var toolDescription: String {

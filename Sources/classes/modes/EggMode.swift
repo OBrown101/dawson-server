@@ -24,10 +24,6 @@ class EggMode: Mode {
                 evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Reading files is forbidden in this chat's current mode.")))
             case .write:
                 evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Writing to files is forbidden in this chat's current mode.")))
-            case .command:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Command execution is forbidden in this chat's current mode.")))
-            case .sudo:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Sudo access is forbidden in this chat's current mode.")))
             case .delegate:
                 evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Delegating to or messaging other agents is forbidden in this chat's current mode.")))
             case .install:
@@ -49,10 +45,6 @@ class EggMode: Mode {
             return "File reading is not permitted in Egg mode."
         case .write:
             return "File writing is not permitted in Egg mode."
-        case .command:
-            return "Command execution is not permitted in Egg mode."
-        case .sudo:
-            return "Elevated privileges are not permitted in Egg mode."
         case .delegate:
             return "Delegating to or messaging other agents is not permitted in Egg mode."
         case .install:
@@ -67,7 +59,7 @@ class EggMode: Mode {
     static func guardRequests(_ requests: [PermissionRequest], agent: Agent) throws {
         for request in requests {
             switch request.action {
-            case .all, .read, .write, .command, .sudo, .delegate, .install, .web, .harness:
+            case .all, .read, .write, .delegate, .install, .web, .harness:
                 throw ModePermissionError.forbidden
             }
         }

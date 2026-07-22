@@ -30,10 +30,6 @@ class UltimateMode: Mode {
             return "File reading is unrestricted in Ultimate mode."
         case .write:
             return "File writing is unrestricted in Ultimate mode."
-        case .command:
-            return "Command execution is unrestricted in Ultimate mode."
-        case .sudo:
-            return "Elevated privileges are unrestricted in Ultimate mode."
         case .delegate:
             return "Delegating to and messaging other agents is unrestricted in Ultimate mode."
         case .install:
@@ -48,7 +44,7 @@ class UltimateMode: Mode {
     static func guardRequests(_ requests: [PermissionRequest], agent: Agent) throws {
         for request in requests {
             switch request.action {
-            case .all, .read, .write, .command, .sudo, .delegate, .install, .web, .harness:
+            case .all, .read, .write, .delegate, .install, .web, .harness:
                 break
             }
         }

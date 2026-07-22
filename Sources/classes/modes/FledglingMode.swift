@@ -24,10 +24,6 @@ class FledglingMode: Mode {
                 evaluations.append(evaluateRead(request, agent: agent))
             case .write:
                 evaluations.append(evaluateWrite(request, agent: agent))
-            case .command:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Command execution is forbidden in this chat's current mode.")))
-            case .sudo:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Sudo access is forbidden in this chat's current mode.")))
             case .delegate:
                 evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Delegating to or messaging another agent requires your approval in Fledgling mode.")))
             case .install:
@@ -72,10 +68,6 @@ class FledglingMode: Mode {
             return "Files within your session workspace can be read. External reads require approval."
         case .write:
             return "All file writes require your explicit approval in Fledgling mode."
-        case .command:
-            return "Command execution is not permitted in Fledgling mode."
-        case .sudo:
-            return "Elevated privileges are not permitted in Fledgling mode."
         case .delegate:
             return "Each delegation to another agent requires your approval in Fledgling mode."
         case .install:
@@ -96,10 +88,6 @@ class FledglingMode: Mode {
                 guard let path = request.target else { break }
                 let inDirectories = FileUtilities.inSessionDirectories(path: path, directories: agent.effectiveDirectories)
                 guard (inDirectories) else { throw ModePermissionError.forbidden }
-            case .command:
-                throw ModePermissionError.forbidden
-            case .sudo:
-                throw ModePermissionError.forbidden
             case .delegate:
                 break
             case .install:

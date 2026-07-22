@@ -22,10 +22,6 @@ class WarriorMode: Mode {
                 evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Full permission access is forbidden in this chat's mode.")))
             case .read, .write:
                 evaluations.append(evaluateReadWrite(request, agent: agent))
-            case .command:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Command execution is forbidden in this chat's current mode.")))
-            case .sudo:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Sudo access is forbidden in this chat's current mode.")))
             case .delegate:
                 evaluations.append(PermissionEvaluation(request: request, decision: .allowed))
             case .install:
@@ -58,10 +54,6 @@ class WarriorMode: Mode {
             return "Files within your session workspace can be read freely. External reads require approval."
         case .write:
             return "Files within your session workspace can be written freely. External writes are not permitted."
-        case .command:
-            return "Command execution is not permitted in Warrior mode."
-        case .sudo:
-            return "Elevated privileges are not permitted in Warrior mode."
         case .delegate:
             return "Delegating to and messaging other agents is permitted in Warrior mode."
         case .install:
@@ -82,10 +74,6 @@ class WarriorMode: Mode {
                 guard let path = request.target else { break }
                 let inDirectories = FileUtilities.inSessionDirectories(path: path, directories: agent.effectiveDirectories)
                 guard (inDirectories) else { throw ModePermissionError.forbidden }
-            case .command:
-                throw ModePermissionError.forbidden
-            case .sudo:
-                throw ModePermissionError.forbidden
             case .delegate:
                 break
             case .install:

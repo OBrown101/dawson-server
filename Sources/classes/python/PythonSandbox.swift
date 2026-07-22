@@ -179,11 +179,16 @@ extension PythonSandbox {
 
         ; --- process lifecycle ---
         (allow process-fork)
-        (allow process-exec (subpath "\(sbEscape(pythonHome))"))
+        (allow process-exec
+          (subpath "\(sbEscape(pythonHome))")
+          (subpath "/usr/lib")
+          (subpath "/bin")
+          (subpath "/usr/bin"))
         (allow signal (target same-sandbox))
 
-        ; --- baseline reads the interpreter/dyld need ---
+        ; --- baseline reads the interpreter/dyld/CoreFoundation need ---
         (allow file-read-metadata)
+        (allow file-read* (literal "/"))
         (allow file-read*
           (subpath "\(sbEscape(pythonHome))")
           (subpath "/usr/lib")
@@ -198,6 +203,7 @@ extension PythonSandbox {
         (allow file-write-data
           (literal "/dev/null"))
         (allow sysctl-read)
+        (allow mach-lookup)
 
         ; --- workspace + scratch (read/write) ---
         \(writableRules)

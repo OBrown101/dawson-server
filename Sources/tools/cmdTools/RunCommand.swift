@@ -30,25 +30,43 @@ class RunCommand: PermissionAware {
 
     func permissionRequests(args: [String: Any]) -> [PermissionRequest] {
         let command = (args["command"] as? String) ?? ""
-        let mode = mode()
+        let currentMode = mode()
 
-        if (mode == .ultimate) {
-            // Ultimate: unsandboxed, unrestricted (user accepted full risk)
-            return [PermissionRequest(action: .command)]
+        // Ultimate: unsandboxed, unrestricted (user accepted full risk)
+        if (currentMode == .ultimate) {
+            return [PermissionRequest(action: .all)]
         }
 
-        let classification = CommandClassifier.classify(command, userAllowed: userAllowedCmds())
-        switch classification {
+        // Resolve the intended working directory for the permission target,
+        // so the mode's in-workspace check evaluates the real location.
+        let target = (args["working_directory"] as? String) ?? workspace().first
+
+        switch CommandClassifier.classify(command, userAllowed: userAllowedCmds()) {
         case .denied(let reason):
-            return [PermissionRequest(action: .command, target: "DENIED: \(reason)")]
+            // Hard refusal: express as an already-denied write so no mode can pass it.
+            // Tool also re-checks at execute time (defense in depth).
+            return [PermissionRequest(
+                action: .write,
+                target: target,
+                requirement: .deny,
+                reason: "Command refused (\(reason)); not permitted below Ultimate mode."
+            )]
+
         case .prompt:
-            // Force approval regardless of mode's default for .command
-            return [PermissionRequest(action: .command,
-                                      requirement: .userApproval,
-                                      reason: "Run unrecognized command (sandboxed to your workspace): \(command)")]
-        case .safe:
-            // Normal mode decision
-            return [PermissionRequest(action: .command, target: workspace().first)]
+            // Unrecognized: force one approval regardless of the mode's default,
+            // then it runs sandboxed. Treated as a write (can't prove it observes).
+            return [PermissionRequest(
+                action: .write,
+                target: target,
+                requirement: .userApproval,
+                reason: "Run unrecognized command (sandboxed to your workspace): \(command)"
+            )]
+
+        case .read:
+            return [PermissionRequest(action: .read, target: target)]
+
+        case .write:
+            return [PermissionRequest(action: .write, target: target)]
         }
     }
 
@@ -58,7 +76,7 @@ class RunCommand: PermissionAware {
         network access — it cannot read, write, or affect anything outside your \
         workspace. Common inspect/build/test commands run directly; unrecognized \
         commands require one approval, then run sandboxed; privilege-escalation, \
-        destructive, and network commands are refused (use fetch_url for the \
+        destructive, and network commands are refused (use \(FetchURL.name) for the \
         web, \(InstallPythonPackage.name) for packages). Prefer the dedicated file \
         tools for reading/editing; use this for builds, tests, git, and CLI \
         tools.
@@ -134,8 +152,8 @@ class RunCommand: PermissionAware {
         if (mode != .ultimate) {
             switch CommandClassifier.classify(command, userAllowed: userAllowedCmds()) {
             case .denied(let reason):
-                return "Command refused (\(reason)). This is not permitted below Ultimate mode. If it involves packages use install_python_package; if the web, use fetch_url."
-            case .safe, .prompt:
+                return "Command refused (\(reason)). This is not permitted below Ultimate mode. If it involves packages use \(InstallPythonPackage.name); if the web, use \(FetchURL.name)."
+            case .read, .write, .prompt:
                 break
             }
         }

@@ -10,6 +10,7 @@ import Foundation
 enum PermissionRequirement: Codable {
     case automatic
     case userApproval
+    case deny
 }
 
 struct PermissionRequest: Codable {

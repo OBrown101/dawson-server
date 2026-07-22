@@ -68,6 +68,13 @@ class GetSessionInfo: ChatAware {
         guard let chat = chat else { return "Unable to find current chat session." }
         guard let agent = AgentHandler.shared.getAgent(chat.agentUUID) else { return "Unable to find agent assigned to chat session." }
         
+        let mode = agent.effectiveMode
+        let modeNote = (mode == agent.mode) ? "" : " (clamped from \(agent.mode.rawValue) to stay within your orchestrator's mode)"
+
+        let workspace = (agent.effectiveDirectories.isEmpty)
+            ? "None configured"
+            : "\n" + agent.effectiveDirectories.map { "        - \($0)" }.joined(separator: "\n")
+        
         var limitString = "No limit"
         if let limit = agent.mode.iterationLimit {
             limitString = String(limit)
@@ -85,15 +92,20 @@ class GetSessionInfo: ChatAware {
         Current Time: \(timeFormatter.string(from: now))
         Current Date: \(dateFormatter.string(from: now))
         User UUID: \(chat.userUUID)
-        Mode: \(agent.mode.rawValue)
+        Mode: \(mode.rawValue)\(modeNote)
         Model: \(agent.model.name)
         Model Provider: \(agent.model.provider.rawValue)
+        Workspace directories: \(workspace)
         Permissions:
-            canRead: \(agent.mode.permissionDescription(for: .read))
-            canWrite: \(agent.mode.permissionDescription(for: .write))
-            canCommands: \(agent.mode.permissionDescription(for: .command))
-            canSudo: \(agent.mode.permissionDescription(for: .sudo))
-            iteration limit (for main agent-loop): \(limitString)
+            Reading files: \(mode.permissionDescription(for: .read))
+            Writing files: \(mode.permissionDescription(for: .write))
+            Running read-only commands: \(mode.permissionDescription(for: .read))
+            Running write/modify commands: \(mode.permissionDescription(for: .write))
+            Web access: \(mode.permissionDescription(for: .web))
+            Installing packages: \(mode.permissionDescription(for: .install))
+            Delegating to agents: \(mode.permissionDescription(for: .delegate))
+            Modifying the shared harness: \(mode.permissionDescription(for: .harness))
+        Iteration limit (for main agent-loop): \(limitString)
         """
     }
 }

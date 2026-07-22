@@ -8,7 +8,8 @@
 import Foundation
 
 enum CommandClass {
-    case safe
-    case prompt
+    case read
+    case write
+    case prompt     // Unrecognized, user approval, then sandboxed
     case denied(reason: String)
 }
