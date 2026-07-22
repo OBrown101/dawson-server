@@ -59,7 +59,6 @@ class ImageProcessor: @unchecked Sendable {
         var imageData = try Data(contentsOf: URL(fileURLWithPath: filePath))
         let maxBytes = maxSizeBytes ?? maxImageBytes
         
-        // Attempt compression only if flag is true and platform supports it
         if (attemptCompression && (imageData.count > maxBytes)) {
             do {
                 imageData = try compressImageData(imageData, mimeType: mimeType, maxBytes: maxBytes)
@@ -128,7 +127,7 @@ class ImageProcessor: @unchecked Sendable {
         let qualitySteps: [CGFloat] = [0.85, 0.7, 0.55, 0.4]
         for quality in qualitySteps {
             if let data = encodeImageMacOS(image, mimeType: mimeType, scale: 1.0, quality: quality),
-               data.count <= maxBytes {
+               (data.count <= maxBytes) {
                 return data
             }
         }
@@ -137,10 +136,10 @@ class ImageProcessor: @unchecked Sendable {
         // but stop at 40% linear size rather than crushing it down to a sliver.
         var scale: CGFloat = 0.9
         var bestEffort: Data?
-        while scale > 0.4 {
+        while (scale > 0.4) {
             if let data = encodeImageMacOS(image, mimeType: mimeType, scale: scale, quality: 0.6) {
                 bestEffort = data
-                if data.count <= maxBytes {
+                if (data.count <= maxBytes) {
                     return data
                 }
             }
@@ -177,7 +176,7 @@ class ImageProcessor: @unchecked Sendable {
             return nil
         }
 
-        if mimeType == "image/png" {
+        if (mimeType == "image/png") {
             return bitmapImage.representation(using: .png, properties: [:])
         }
         return bitmapImage.representation(using: .jpeg, properties: [.compressionFactor: quality])

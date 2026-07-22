@@ -195,17 +195,23 @@ final class Grep: PermissionAware {
                         output.append("\(fileURL.path):\(index + 1): \(truncate(lines[index]))")
                     }
                 } else {
+                    let matchSet = Set(matchIndices)
                     var lastPrinted = -2
+
                     for index in matchIndices {
                         let blockStart = max(0, index - contextLines)
                         let blockEnd = min(lines.count - 1, index + contextLines)
+                        let start = max(blockStart, lastPrinted + 1)
+
+                        // Fully covered by a previous block — nothing new to print.
+                        guard (start <= blockEnd) else { continue }
 
                         if (blockStart > lastPrinted + 1 && lastPrinted >= 0) {
                             output.append("--")
                         }
 
-                        for lineIndex in max(blockStart, lastPrinted + 1)...blockEnd {
-                            let marker = matchIndices.contains(lineIndex) ? ":" : "-"
+                        for lineIndex in start...blockEnd {
+                            let marker = matchSet.contains(lineIndex) ? ":" : "-"
                             output.append("\(fileURL.path):\(lineIndex + 1)\(marker) \(truncate(lines[lineIndex]))")
                         }
 
