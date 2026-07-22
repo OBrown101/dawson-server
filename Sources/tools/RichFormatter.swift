@@ -8,12 +8,12 @@
 import Foundation
 
 class RichFormatter: Tool {
-    let name = "rich_formatter"
+    static let name = "rich_formatter"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": RichFormatter.name,
             "description": "Formats text using Markdown, adds code blocks or tables.",
             "parameters": [
                 "type": "object",
@@ -34,7 +34,7 @@ class RichFormatter: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": RichFormatter.name,
             "description": "Formats text using Markdown, adds code blocks or tables.",
             "input_schema": [
                 "type": "object",
@@ -57,7 +57,7 @@ class RichFormatter: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": RichFormatter.name,
                 "description": "Formats text using Markdown, adds code blocks or tables.",
                 "parameters": [
                     "type": "object",

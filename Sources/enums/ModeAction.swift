@@ -13,6 +13,10 @@ enum ModeAction: String, Codable {
     case write
     case command
     case sudo
+    case delegate
+    case install
+    case web
+    case harness
 }
 
 enum ModePermissionError: Error, LocalizedError {

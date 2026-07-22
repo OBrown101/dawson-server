@@ -8,12 +8,12 @@
 import Foundation
 
 class MempalaceKgInvalidate: Tool {
-    let name = "mempalace_kg_invalidate"
+    static let name = "mempalace_kg_invalidate"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MempalaceKgInvalidate.name,
             "description": "Mark a fact as no longer true. E.g. ankle injury resolved, job ended, moved house.",
             "parameters": [
                 "type": "object",
@@ -42,7 +42,7 @@ class MempalaceKgInvalidate: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MempalaceKgInvalidate.name,
             "description": "Mark a fact as no longer true. E.g. ankle injury resolved, job ended, moved house.",
             "input_schema": [
                 "type": "object",
@@ -73,7 +73,7 @@ class MempalaceKgInvalidate: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MempalaceKgInvalidate.name,
                 "description": "Mark a fact as no longer true. E.g. ankle injury resolved, job ended, moved house.",
                 "parameters": [
                     "type": "object",
@@ -102,6 +102,6 @@ class MempalaceKgInvalidate: Tool {
     }
     
     func execute(args: [String: Any]) -> String {
-        return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
+        return MempalaceMemory.shared.mempalaceExec(name: MempalaceKgInvalidate.name, args: args)
     }
 }

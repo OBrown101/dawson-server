@@ -1,0 +1,16 @@
+{
+  "generated": "2026-07-22T06:30:35.858965+00:00",
+  "tools": [
+    {
+      "module": "pdf_reader",
+      "description": "",
+      "functions": [
+        {
+          "name": "read_pdf",
+          "signature": "args",
+          "doc": ""
+        }
+      ]
+    }
+  ]
+}

@@ -8,12 +8,12 @@
 import Foundation
 
 class MempalaceAddDrawer: Tool {
-    let name = "mempalace_add_drawer"
+    static let name = "mempalace_add_drawer"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MempalaceAddDrawer.name,
             "description": "File verbatim content into the palace. Checks for duplicates first.",
             "parameters": [
                 "type": "object",
@@ -46,7 +46,7 @@ class MempalaceAddDrawer: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MempalaceAddDrawer.name,
             "description": "File verbatim content into the palace. Checks for duplicates first.",
             "input_schema": [
                 "type": "object",
@@ -81,7 +81,7 @@ class MempalaceAddDrawer: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MempalaceAddDrawer.name,
                 "description": "File verbatim content into the palace. Checks for duplicates first.",
                 "parameters": [
                     "type": "object",
@@ -114,6 +114,6 @@ class MempalaceAddDrawer: Tool {
     }
     
     func execute(args: [String: Any]) -> String {
-        return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
+        return MempalaceMemory.shared.mempalaceExec(name: MempalaceAddDrawer.name, args: args)
     }
 }

@@ -8,12 +8,12 @@
 import Foundation
 
 class MempalaceDeleteDrawer: Tool {
-    let name = "mempalace_delete_drawer"
+    static let name = "mempalace_delete_drawer"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MempalaceDeleteDrawer.name,
             "description": "Delete a drawer by ID. Irreversible.",
             "parameters": [
                 "type": "object",
@@ -30,7 +30,7 @@ class MempalaceDeleteDrawer: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MempalaceDeleteDrawer.name,
             "description": "Delete a drawer by ID. Irreversible.",
             "input_schema": [
                 "type": "object",
@@ -49,7 +49,7 @@ class MempalaceDeleteDrawer: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MempalaceDeleteDrawer.name,
                 "description": "Delete a drawer by ID. Irreversible.",
                 "parameters": [
                     "type": "object",
@@ -66,6 +66,6 @@ class MempalaceDeleteDrawer: Tool {
     }
     
     func execute(args: [String: Any]) -> String {
-        return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
+        return MempalaceMemory.shared.mempalaceExec(name: MempalaceDeleteDrawer.name, args: args)
     }
 }

@@ -8,15 +8,21 @@
 import Foundation
 
 protocol Tool {
-    var name: String { get }
+    static var name: String { get }
     func ollamaSchema() -> [String: Any]
     func openAISchema() -> [String: Any]
     func anthropicSchema() -> [String: Any]
     func execute(args: [String: Any]) async -> String
 }
 
+extension Tool {
+    var instanceName: String {
+        Self.name
+    }
+}
+
 class ExampleTool: Tool {
-    let name = "example_tool"
+    static let name = "example_tool"
 
     func openAISchema() -> [String : Any] {
         return [:]
@@ -30,7 +36,7 @@ class ExampleTool: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": ExampleTool.name,
                 "description": "Example tool description demonstrating the tools use, operations, and when it should be called.",
                 "parameters": [
                     "type": "object",
@@ -57,7 +63,7 @@ class ExampleTool: Tool {
 }
 
 class ExamplePermissionAwareTool: PermissionAware {
-    let name = "example_tool"
+    static let name = "example_permission_aware_tool"
     
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
         return [
@@ -67,7 +73,7 @@ class ExamplePermissionAwareTool: PermissionAware {
     
     func openAISchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": ExamplePermissionAwareTool.name,
             "description": "Example tool description demonstrating the tools use, operations, and when it should be called.",
             "parameters": [
                 "type": "object",
@@ -84,7 +90,7 @@ class ExamplePermissionAwareTool: PermissionAware {
 
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": ExamplePermissionAwareTool.name,
             "description": "Example tool description demonstrating the tools use, operations, and when it should be called.",
             "input_schema": [
                 "type": "object",
@@ -103,7 +109,7 @@ class ExamplePermissionAwareTool: PermissionAware {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": ExamplePermissionAwareTool.name,
                 "description": "Example tool description demonstrating the tools use, operations, and when it should be called.",
                 "parameters": [
                     "type": "object",

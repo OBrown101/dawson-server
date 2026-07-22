@@ -8,12 +8,12 @@
 import Foundation
 
 class MempalaceListWings: Tool {
-    let name = "mempalace_list_wings"
+    static let name = "mempalace_list_wings"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MempalaceListWings.name,
             "description": "List all wings with drawer counts",
             "parameters": [
                 "type": "object",
@@ -25,7 +25,7 @@ class MempalaceListWings: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MempalaceListWings.name,
             "description": "List all wings with drawer counts",
             "input_schema": [
                 "type": "object",
@@ -39,7 +39,7 @@ class MempalaceListWings: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MempalaceListWings.name,
                 "description": "List all wings with drawer counts",
                 "parameters": [
                     "type": "object",
@@ -51,6 +51,6 @@ class MempalaceListWings: Tool {
     }
     
     func execute(args: [String: Any]) -> String {
-        return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
+        return MempalaceMemory.shared.mempalaceExec(name: MempalaceListWings.name, args: args)
     }
 }

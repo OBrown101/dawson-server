@@ -8,12 +8,12 @@
 import Foundation
 
 class MempalaceKgAdd: Tool {
-    let name = "mempalace_kg_add"
+    static let name = "mempalace_kg_add"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MempalaceKgAdd.name,
             "description": "Add a fact to the knowledge graph. Subject → predicate → object with optional time window. E.g. ('Max', 'started_school', 'Year 7', valid_from='2026-09-01').",
             "parameters": [
                 "type": "object",
@@ -46,7 +46,7 @@ class MempalaceKgAdd: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MempalaceKgAdd.name,
             "description": "Add a fact to the knowledge graph. Subject → predicate → object with optional time window. E.g. ('Max', 'started_school', 'Year 7', valid_from='2026-09-01').",
             "input_schema": [
                 "type": "object",
@@ -81,7 +81,7 @@ class MempalaceKgAdd: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MempalaceKgAdd.name,
                 "description": "Add a fact to the knowledge graph. Subject → predicate → object with optional time window. E.g. ('Max', 'started_school', 'Year 7', valid_from='2026-09-01').",
                 "parameters": [
                     "type": "object",
@@ -114,6 +114,6 @@ class MempalaceKgAdd: Tool {
     }
     
     func execute(args: [String: Any]) -> String {
-        return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
+        return MempalaceMemory.shared.mempalaceExec(name: MempalaceKgAdd.name, args: args)
     }
 }

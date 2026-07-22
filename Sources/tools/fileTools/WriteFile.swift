@@ -8,7 +8,7 @@
 import Foundation
 
 class WriteFile: PermissionAware {
-    let name = "write_file"
+    static let name = "write_file"
 
     private let toolDescription = """
         Writes content to a file at the specified path, creating parent \
@@ -49,7 +49,7 @@ class WriteFile: PermissionAware {
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": WriteFile.name,
             "description": toolDescription,
             "parameters": parametersSchema
         ]
@@ -57,7 +57,7 @@ class WriteFile: PermissionAware {
 
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": WriteFile.name,
             "description": toolDescription,
             "input_schema": parametersSchema
         ]
@@ -67,7 +67,7 @@ class WriteFile: PermissionAware {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": WriteFile.name,
                 "description": toolDescription,
                 "parameters": parametersSchema
             ]

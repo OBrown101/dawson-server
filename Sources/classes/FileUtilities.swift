@@ -18,6 +18,10 @@ class FileUtilities {
             return isSameOrChild(fileURL, of: directoryURL) || (fileURL == directoryURL)
         }
     }
+    
+    static func canonicalFilePath(_ path: String) -> String {
+        URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+    }
 
     private static func canonicalFileURL(_ path: String) -> URL {
         let normalizedPath = normalizePathString(path)

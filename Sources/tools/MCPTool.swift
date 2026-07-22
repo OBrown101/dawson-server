@@ -10,7 +10,7 @@ import MCP
 import System
 
 class MCPTool: PermissionAware {
-    let name = "mcp_tool"
+    static let name = "mcp_tool"
     
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
         return [
@@ -55,7 +55,7 @@ class MCPTool: PermissionAware {
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MCPTool.name,
             "description": """
             Interact with any connected Model Context Protocol (MCP) server.
 
@@ -108,7 +108,7 @@ class MCPTool: PermissionAware {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MCPTool.name,
             "description": """
             Interact with any connected Model Context Protocol (MCP) server.
 
@@ -163,7 +163,7 @@ class MCPTool: PermissionAware {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MCPTool.name,
                 "description": """
                 Interact with any connected Model Context Protocol (MCP) server.
 

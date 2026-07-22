@@ -10,12 +10,12 @@ import AppKit
 #endif
 
 class Speak: Tool {
-    let name = "system_speak"
+    static let name = "system_speak"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": Speak.name,
             "description": "Uses the system's built-in TTS to speak text.",
             "parameters": [
                 "type": "object",
@@ -36,7 +36,7 @@ class Speak: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": Speak.name,
             "description": "Uses the system's built-in TTS to speak text.",
             "input_schema": [
                 "type": "object",
@@ -59,7 +59,7 @@ class Speak: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": Speak.name,
                 "description": "Uses the system's built-in TTS to speak text.",
                 "parameters": [
                     "type": "object",

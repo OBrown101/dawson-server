@@ -9,7 +9,7 @@ import Foundation
 
 /*
 class SpawnAgent: PermissionAware {
-    let name = "spawn_agent"
+    static let name = "spawn_agent"
     let description = "Spawns a new sub-agent with specified configuration. Creates an agent and its associated chat session."
 
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {

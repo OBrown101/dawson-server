@@ -8,7 +8,7 @@
 import Foundation
 
 class ReadFile: PermissionAware {
-    let name = "read_file"
+    static let name = "read_file"
     let description = "Reads a file at an exact path. The path must be an absolute path or a valid path relative to the current working directory. Do not pass only a filename like README.md or main.swift unless that exact relative path is known to exist. Use find_file first to locate files by name, then pass the returned absolute path to read_file. Can read a specific line range (start/end) and can prefix lines with line numbers for navigation — never include those 'N:' prefixes in text passed to replace_in_file. Every result begins with a header showing the visible range and the file's total line count. For long files, read only the line range of interest."
 
     private let maxFileSize = 500_000        // 500KB limit for unranged reads
@@ -51,7 +51,7 @@ class ReadFile: PermissionAware {
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": ReadFile.name,
             "description": description,
             "parameters": parametersSchema
         ]
@@ -59,7 +59,7 @@ class ReadFile: PermissionAware {
 
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": ReadFile.name,
             "description": description,
             "input_schema": parametersSchema
         ]
@@ -69,7 +69,7 @@ class ReadFile: PermissionAware {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": ReadFile.name,
                 "description": description,
                 "parameters": parametersSchema
             ]

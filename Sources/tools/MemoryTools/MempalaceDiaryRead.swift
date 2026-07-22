@@ -8,12 +8,12 @@
 import Foundation
 
 class MempalaceDiaryRead: Tool {
-    let name = "mempalace_diary_read"
+    static let name = "mempalace_diary_read"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MempalaceDiaryRead.name,
             "description": """
             Read your recent diary entries (in AAAK). See what past versions of yourself recorded — your journal across sessions.
             """,
@@ -37,7 +37,7 @@ class MempalaceDiaryRead: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MempalaceDiaryRead.name,
             "description": """
             Read your recent diary entries (in AAAK). See what past versions of yourself recorded — your journal across sessions.
             """,
@@ -63,7 +63,7 @@ class MempalaceDiaryRead: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MempalaceDiaryRead.name,
                 "description": "Read your recent diary entries (in AAAK). See what past versions of yourself recorded — your journal across sessions.",
                 "parameters": [
                     "type": "object",
@@ -84,6 +84,6 @@ class MempalaceDiaryRead: Tool {
     }
     
     func execute(args: [String: Any]) -> String {
-        return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
+        return MempalaceMemory.shared.mempalaceExec(name: MempalaceDiaryRead.name, args: args)
     }
 }

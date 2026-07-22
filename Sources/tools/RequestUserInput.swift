@@ -6,12 +6,12 @@
 //
 
 class RequestUserInput: Tool {
-    let name = "request_user_input"
+    static let name = "request_user_input"
     
     func openAISchema() -> [String: Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": RequestUserInput.name,
             "description": "Pauses main agent loop and requests input from the user. Used for additional information, answer to questions, or any other input from the user.",
             "parameters": [
                 "type": "object",
@@ -28,7 +28,7 @@ class RequestUserInput: Tool {
     
     func anthropicSchema() -> [String: Any] {
         return [
-            "name": name,
+            "name": RequestUserInput.name,
             "description": "Pauses main agent loop and requests input from the user. Used for additional information, answer to questions, or any other input from the user.",
             "input_schema": [
                 "type": "object",
@@ -47,7 +47,7 @@ class RequestUserInput: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": RequestUserInput.name,
                 "description": "Pauses main agent loop and requests input from the user. Used for additional information, answer to questions, or any other input from the user.",
                 "parameters": [
                     "type": "object",

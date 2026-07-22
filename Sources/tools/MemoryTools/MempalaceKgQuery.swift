@@ -8,12 +8,12 @@
 import Foundation
 
 class MempalaceKgQuery: Tool {
-    let name = "mempalace_kg_query"
+    static let name = "mempalace_kg_query"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MempalaceKgQuery.name,
             "description": "Query the knowledge graph for an entity's relationships. Returns typed facts with temporal validity. E.g. 'Max' → child_of Alice, loves chess, does swimming. Filter by date with as_of to see what was true at a point in time.",
             "parameters": [
                 "type": "object",
@@ -38,7 +38,7 @@ class MempalaceKgQuery: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MempalaceKgQuery.name,
             "description": "Query the knowledge graph for an entity's relationships. Returns typed facts with temporal validity. E.g. 'Max' → child_of Alice, loves chess, does swimming. Filter by date with as_of to see what was true at a point in time.",
             "input_schema": [
                 "type": "object",
@@ -65,7 +65,7 @@ class MempalaceKgQuery: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MempalaceKgQuery.name,
                 "description": "Query the knowledge graph for an entity's relationships. Returns typed facts with temporal validity. E.g. 'Max' → child_of Alice, loves chess, does swimming. Filter by date with as_of to see what was true at a point in time.",
                 "parameters": [
                     "type": "object",
@@ -90,6 +90,6 @@ class MempalaceKgQuery: Tool {
     }
     
     func execute(args: [String: Any]) -> String {
-        return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
+        return MempalaceMemory.shared.mempalaceExec(name: MempalaceKgQuery.name, args: args)
     }
 }

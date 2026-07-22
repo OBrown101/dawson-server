@@ -8,7 +8,7 @@
 import Foundation
 
 final class Grep: PermissionAware {
-    let name = "grep_search"
+    static let name = "grep_search"
     let description = "Searches inside text files under a permitted file or directory. Returns matching lines with absolute file paths and line numbers; set context_lines to also see surrounding lines. Use find_file when searching filenames instead."
 
     private static let defaultMaxResults = 100
@@ -84,7 +84,7 @@ final class Grep: PermissionAware {
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": Grep.name,
             "description": description,
             "parameters": parametersSchema
         ]
@@ -92,7 +92,7 @@ final class Grep: PermissionAware {
 
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": Grep.name,
             "description": description,
             "input_schema": parametersSchema
         ]
@@ -102,7 +102,7 @@ final class Grep: PermissionAware {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": Grep.name,
                 "description": description,
                 "parameters": parametersSchema
             ]

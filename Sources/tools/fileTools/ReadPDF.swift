@@ -8,7 +8,7 @@
 import Foundation
 
 final class ReadPDF: PermissionAware {
-    let name = "read_pdf"
+    static let name = "read_pdf"
 
     let description = """
     Reads text from a PDF file at an exact path. The path must be an absolute path or a valid path relative to the current working directory. Use find_file first if the PDF location is unknown. Supports optional 1-based page ranges.
@@ -47,7 +47,7 @@ final class ReadPDF: PermissionAware {
     func openAISchema() -> [String: Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": ReadPDF.name,
             "description": description,
             "parameters": parametersSchema
         ]
@@ -55,7 +55,7 @@ final class ReadPDF: PermissionAware {
 
     func anthropicSchema() -> [String: Any] {
         return [
-            "name": name,
+            "name": ReadPDF.name,
             "description": description,
             "input_schema": parametersSchema
         ]
@@ -65,7 +65,7 @@ final class ReadPDF: PermissionAware {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": ReadPDF.name,
                 "description": description,
                 "parameters": parametersSchema
             ]

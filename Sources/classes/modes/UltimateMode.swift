@@ -34,21 +34,21 @@ class UltimateMode: Mode {
             return "Command execution is unrestricted in Ultimate mode."
         case .sudo:
             return "Elevated privileges are unrestricted in Ultimate mode."
+        case .delegate:
+            return "Delegating to and messaging other agents is unrestricted in Ultimate mode."
+        case .install:
+            return "Installing Python packages, software, etc. is unrestricted in Ultimate mode."
+        case .web:
+            return "Web access is unrestricted in Ultimate mode."
+        case .harness:
+            return "Modifying the harness is unrestricted in Ultimate mode."
         }
     }
     
     static func guardRequests(_ requests: [PermissionRequest], agent: Agent) throws {
         for request in requests {
             switch request.action {
-            case .all:
-                break
-            case .read:
-                break
-            case .write:
-                break
-            case .command:
-                break
-            case .sudo:
+            case .all, .read, .write, .command, .sudo, .delegate, .install, .web, .harness:
                 break
             }
         }

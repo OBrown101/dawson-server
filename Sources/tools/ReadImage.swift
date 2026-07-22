@@ -7,7 +7,7 @@
 import Foundation
 
 class ReadImage: PermissionAware {
-    let name = "read_image"
+    static let name = "read_image"
     let description = "Reads an image file from disk and returns an image attachment payload. Use this when the user asks you to inspect, analyze, describe, or include an image file from an allowed workspace. Supports jpg, jpeg, png, webp, and gif."
 
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
@@ -22,7 +22,7 @@ class ReadImage: PermissionAware {
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": ReadImage.name,
             "description": description,
             "parameters": [
                 "type": "object",
@@ -49,7 +49,7 @@ class ReadImage: PermissionAware {
 
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": ReadImage.name,
             "description": description,
             "input_schema": openAISchema()["parameters"] as? [String : Any] ?? [:]
         ]
@@ -59,7 +59,7 @@ class ReadImage: PermissionAware {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": ReadImage.name,
                 "description": description,
                 "parameters": openAISchema()["parameters"] as? [String : Any] ?? [:]
             ]

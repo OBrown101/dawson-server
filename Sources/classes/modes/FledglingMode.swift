@@ -28,6 +28,14 @@ class FledglingMode: Mode {
                 evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Command execution is forbidden in this chat's current mode.")))
             case .sudo:
                 evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Sudo access is forbidden in this chat's current mode.")))
+            case .delegate:
+                evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Delegating to or messaging another agent requires your approval in Fledgling mode.")))
+            case .install:
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Installing packages, software, etc. is forbidden in this chat's current mode.")))
+            case .web:
+                evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Web access requires your approval in Fledgling mode.")))
+            case .harness:
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Modifying the harness is forbidden in this chat's current mode.")))
             }
         }
         return evaluations
@@ -37,7 +45,7 @@ class FledglingMode: Mode {
         guard let path = request.target else {
             return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Missing read target path."))
         }
-        if (FileUtilities.inSessionDirectories(path: path, directories: agent.directories)) {
+        if (FileUtilities.inSessionDirectories(path: path, directories: agent.effectiveDirectories)) {
             return PermissionEvaluation(request: request, decision: .allowed)
         } else {
             return PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Read outside session workspace: \(path)"))
@@ -49,7 +57,7 @@ class FledglingMode: Mode {
             return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Missing write target path."))
         }
 
-        if (FileUtilities.inSessionDirectories(path: path, directories: agent.directories)) {
+        if (FileUtilities.inSessionDirectories(path: path, directories: agent.effectiveDirectories)) {
             return PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Write operation requires user approval: \(path)"))
         } else {
             return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Writes outside workspace are forbidden."))
@@ -68,6 +76,14 @@ class FledglingMode: Mode {
             return "Command execution is not permitted in Fledgling mode."
         case .sudo:
             return "Elevated privileges are not permitted in Fledgling mode."
+        case .delegate:
+            return "Each delegation to another agent requires your approval in Fledgling mode."
+        case .install:
+            return "Installing Python packages, software, etc. is not permitted in Fledgling mode."
+        case .web:
+            return "Each web access requires your approval in Fledgling mode."
+        case .harness:
+            return "Modifying the harness (e.g. promoting shared tools) is not permitted in Fledgling mode."
         }
     }
     
@@ -78,11 +94,19 @@ class FledglingMode: Mode {
                 throw ModePermissionError.forbidden
             case .read, .write:
                 guard let path = request.target else { break }
-                let inDirectories = FileUtilities.inSessionDirectories(path: path, directories: agent.directories)
+                let inDirectories = FileUtilities.inSessionDirectories(path: path, directories: agent.effectiveDirectories)
                 guard (inDirectories) else { throw ModePermissionError.forbidden }
             case .command:
                 throw ModePermissionError.forbidden
             case .sudo:
+                throw ModePermissionError.forbidden
+            case .delegate:
+                break
+            case .install:
+                throw ModePermissionError.forbidden
+            case .web:
+                break
+            case .harness:
                 throw ModePermissionError.forbidden
             }
         }

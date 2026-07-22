@@ -52,7 +52,7 @@ class Agent: Codable, @unchecked Sendable {
     var directories: [String]
     var updatedTimestamp: Int64
     
-    private var tools: [Tool] = (Agent.requiredTools + Agent.optionalTools)
+    private lazy var tools: [Tool] = (Agent.requiredTools + optionalTools)
     private var history: [Message] = []
     private var summary: String = ""
     var suspendData: SuspendData? = nil
@@ -64,13 +64,22 @@ class Agent: Codable, @unchecked Sendable {
     static let agentsMetadataDirectory = agentsDirectory.appendingPathComponent("metadata")
     static let agentsHistoryDirectory = agentsDirectory.appendingPathComponent("history")
     
-    static var optionalTools: [Tool] {
-        return [Grep(), Tree(), ReadImage(), WriteFile(), FindFile(), ReplaceInFile(), ReadFile(), Speak(), RichFormatter(), ReadPDF()]
+    private var optionalTools: [Tool] {
+        [
+            Grep(), Tree(), ReadImage(), FindFile(), ReadFile(), ReadPDF(),
+            WriteFile(), ReplaceInFile(),
+            Speak(), RichFormatter(),
+            InstallPythonPackage(), ListPythonTools(),
+            PromotePythonTool(workspace: { self.directories }),
+            RunPythonScript(workspace: { self.directories }),
+            RunPythonCode(workspace: { self.directories }),
+            RunCommand(workspace: { self.directories }, mode: { self.mode })
+        ]
     }
-    static var requiredTools: [Tool] {
+    private static var requiredTools: [Tool] {
         [RequestUserInput(), EnvAwareness(), GetFullSkill(), GetSessionInfo()] + Agent.memoryTools
     }
-    static var memoryTools: [Tool] {
+    private static var memoryTools: [Tool] {
         [
             MempalaceAddDrawer(), MempalaceCheckDuplicate(), MempalaceDeleteDrawer(), MempalaceDiaryRead(),
             MempalaceDiaryWrite(), MempalaceGetAAAKSpec(), MempalaceGraphStats(),
@@ -78,6 +87,16 @@ class Agent: Codable, @unchecked Sendable {
             MempalaceListRooms(), MempalaceListWings(), MempalaceSearch(),
             MempalaceStatus(), MempalaceTraverse()
         ]
+    }
+    
+    var effectiveMode: ModeType {
+        // TODO: Finish implementing once add delegation code
+        self.mode
+    }
+    
+    var effectiveDirectories: [String] {
+        // TODO: Finish implementing once add delegation code
+        self.directories
     }
 
     init(
@@ -209,7 +228,7 @@ class Agent: Codable, @unchecked Sendable {
     }
     
     private func executeTool(_ toolCall: ToolCall) async -> String {
-        guard let tool = tools.first(where: { $0.name == toolCall.name }) else {
+        guard let tool = tools.first(where: { $0.instanceName == toolCall.name }) else {
             return "Error: unknown tool '\(toolCall.name)'"
         }
 
@@ -217,11 +236,11 @@ class Agent: Codable, @unchecked Sendable {
     }
 
     private func runTool(_ toolCall: ToolCall) async -> ToolResult {
-        guard let tool = tools.first(where: { $0.name == toolCall.name }) else {
+        guard let tool = tools.first(where: { $0.instanceName == toolCall.name }) else {
             return .denied("Error: unknown tool '\(toolCall.name)'")
         }
         
-        if toolCall.name == RequestUserInput().name {
+        if (toolCall.name == RequestUserInput.name) {
             let prompt = toolCall.argDict["prompt"] as? String ?? "Input required"
 
             let request = UserInputRequest(
@@ -345,7 +364,7 @@ class Agent: Codable, @unchecked Sendable {
                         let toolOutput = await executeTool(tc)
                         messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: toolOutput, toolCallId: tc.id))
                         
-                        if (tc.name == ReadImage().name),
+                        if (tc.name == ReadImage.name),
                            let imageMessage = await AgentUtilities.messageFromImageTC(runUUID: runUUID, toolCall: tc) {
                             messages.append(imageMessage)
                         }
@@ -446,7 +465,7 @@ class Agent: Codable, @unchecked Sendable {
                     await onEvent(.toolResult(output), runUUID)
                     toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: output, toolCallId: tc.id))
                     
-                    if (tc.name == ReadImage().name),
+                    if (tc.name == ReadImage.name),
                        let imageMessage = await AgentUtilities.messageFromImageTC(runUUID: runUUID, toolCall: tc) {
                         toolResults.append(imageMessage)
                     }
@@ -573,7 +592,7 @@ class Agent: Codable, @unchecked Sendable {
         for tc in toolCalls {
             await onEvent(.toolCall(tc.name), runUUID)
 
-            guard let tool = Agent.memoryTools.first(where: { $0.name == tc.name }) else { continue }
+            guard let tool = Agent.memoryTools.first(where: { $0.instanceName == tc.name }) else { continue }
 
             let output = await tool.execute(args: tc.argDict)
             await onEvent(.toolResult(output), runUUID)

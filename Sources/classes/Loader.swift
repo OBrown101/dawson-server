@@ -15,25 +15,8 @@ class Loader: @unchecked Sendable {
         let dynamicSoul = loadAgentDynamicSoul(agent)
         let memorySchema = loadMemory()
         let skillSummaries = loadSkillSummaries()
-//        let basicInfo = loadBasicInfo()
-        return [primarySoul, dynamicSoul, skillSummaries, memorySchema].joined(separator: "\n")
-    }
-    
-    func loadBasicInfo() -> String {
-        let now = Date()
-        let formatter = DateFormatter()
-        formatter.dateStyle = .full
-        formatter.timeStyle = .full
-        formatter.timeZone = TimeZone.current
-        let dateString = formatter.string(from: now)
-        let timezoneName = TimeZone.current.identifier
-        
-        return """
-        ## BASIC INFO ##
-        Date & time: \(dateString)
-        Time zone: \(timezoneName)
-        ## --- ##
-        """
+        let pythonTools = loadPythonToolSummaries()
+        return [primarySoul, dynamicSoul, skillSummaries, pythonTools, memorySchema].joined(separator: "\n")
     }
     
     func loadMemory() -> String {
@@ -66,6 +49,24 @@ class Loader: @unchecked Sendable {
         return ""
     }
     
+    func loadPythonToolSummaries() -> String {
+        let summary = ToolCatalog.promptSummary()
+        guard (!summary.isEmpty) else { return "" }
+
+        return """
+        ## SHARED PYTHON TOOL LIBRARY ##
+
+        Reusable Python tools built in previous conversations, runnable via \
+        `\(RunPythonScript.name)` (arguments are passed as keywords). Before writing \
+        any new Python code, check whether one of these already solves the task; \
+        call `\(ListPythonTools.name)` for full function signatures.
+
+        \(summary)
+
+        ## --- ##
+        """
+    }
+    
     func loadSkillSummaries() -> String {
         let skills = SkillHandler.shared.loadSkills()
         print("Loaded \(skills.count) Skills")
@@ -79,7 +80,7 @@ class Loader: @unchecked Sendable {
             """
         }.joined(separator: "\n")
         
-        let fullSkillTool = GetFullSkill().name
+        let fullSkillTool = GetFullSkill.name
         
         return """
         ## BRIEF SUMMARY OF YOUR AVAILABLE SKILLS ##

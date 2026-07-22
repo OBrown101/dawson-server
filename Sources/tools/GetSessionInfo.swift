@@ -8,7 +8,7 @@
 import Foundation
 
 class GetSessionInfo: ChatAware {
-    let name = "get_session_info"
+    static let name = "get_session_info"
     
     var chat: Chat? = nil
     func setChat(_ chat: Chat?) {
@@ -18,7 +18,7 @@ class GetSessionInfo: ChatAware {
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": GetSessionInfo.name,
             "description": """
             Gets details about the current chat-session with the user, including the user UUID, mode, and the permissions that are enabled for that mode.
             """,
@@ -31,7 +31,7 @@ class GetSessionInfo: ChatAware {
     }
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": GetSessionInfo.name,
             "description": """
             Gets details about the current chat-session with the user, including the user UUID, mode, and the permissions that are enabled for that mode.
             """,
@@ -47,7 +47,7 @@ class GetSessionInfo: ChatAware {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": GetSessionInfo.name,
                 "description": """
                 Gets details about the current chat‑session with the user, including the user UUID, mode, and the
                 permissions that are enabled for that mode.

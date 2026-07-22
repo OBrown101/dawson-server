@@ -8,12 +8,12 @@
 import Foundation
 
 class MempalaceKgTimeline: Tool {
-    let name = "mempalace_kg_timeline"
+    static let name = "mempalace_kg_timeline"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MempalaceKgTimeline.name,
             "description": "Chronological timeline of facts. Shows the story of an entity (or everything) in order.",
             "parameters": [
                 "type": "object",
@@ -30,7 +30,7 @@ class MempalaceKgTimeline: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MempalaceKgTimeline.name,
             "description": "Chronological timeline of facts. Shows the story of an entity (or everything) in order.",
             "input_schema": [
                 "type": "object",
@@ -49,7 +49,7 @@ class MempalaceKgTimeline: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MempalaceKgTimeline.name,
                 "description": "Chronological timeline of facts. Shows the story of an entity (or everything) in order.",
                 "parameters": [
                     "type": "object",
@@ -66,6 +66,6 @@ class MempalaceKgTimeline: Tool {
     }
     
     func execute(args: [String: Any]) -> String {
-        return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
+        return MempalaceMemory.shared.mempalaceExec(name: MempalaceKgTimeline.name, args: args)
     }
 }

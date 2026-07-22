@@ -8,7 +8,7 @@
 import Foundation
 
 final class Tree: PermissionAware {
-    let name = "directory_tree"
+    static let name = "directory_tree"
     let description = "Shows a compact directory tree for a known directory. Use this to understand project structure without listing every file recursively."
 
     private static let defaultMaxEntries = 300
@@ -51,7 +51,7 @@ final class Tree: PermissionAware {
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": Tree.name,
             "description": description,
             "parameters": parametersSchema
         ]
@@ -59,7 +59,7 @@ final class Tree: PermissionAware {
 
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": Tree.name,
             "description": description,
             "input_schema": parametersSchema
         ]
@@ -69,7 +69,7 @@ final class Tree: PermissionAware {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": Tree.name,
                 "description": description,
                 "parameters": parametersSchema
             ]

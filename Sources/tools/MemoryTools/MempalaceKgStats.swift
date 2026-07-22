@@ -8,12 +8,12 @@
 import Foundation
 
 class MempalaceKgStats: Tool {
-    let name = "mempalace_kg_stats"
+    static let name = "mempalace_kg_stats"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MempalaceKgStats.name,
             "description": "Knowledge graph overview: entities, triples, current vs expired facts, relationship types.",
             "parameters": [
                 "type": "object",
@@ -25,7 +25,7 @@ class MempalaceKgStats: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MempalaceKgStats.name,
             "description": "Knowledge graph overview: entities, triples, current vs expired facts, relationship types.",
             "input_schema": [
                 "type": "object",
@@ -39,7 +39,7 @@ class MempalaceKgStats: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MempalaceKgStats.name,
                 "description": "Knowledge graph overview: entities, triples, current vs expired facts, relationship types.",
                 "parameters": [
                     "type": "object",
@@ -51,6 +51,6 @@ class MempalaceKgStats: Tool {
     }
     
     func execute(args: [String: Any]) -> String {
-        return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
+        return MempalaceMemory.shared.mempalaceExec(name: MempalaceKgStats.name, args: args)
     }
 }

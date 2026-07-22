@@ -8,7 +8,7 @@
 import Foundation
 
 class FindFile: PermissionAware {
-    let name = "find_file"
+    static let name = "find_file"
     let description = "Finds files or directories by name under a root path. Use this when looking for filenames or directory names such as README.md, *.kt, build.gradle.kts, App.swift, or ViewModel.kt. The pattern must match the WHOLE name (use * wildcards for partial matches, e.g. *Handler*). This does not search file contents — use grep_search for that. Returns absolute paths. Skips common build/dependency directories (.git, node_modules, build, etc.) by default."
 
     private static let defaultMaxResults = 50
@@ -30,7 +30,7 @@ class FindFile: PermissionAware {
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": FindFile.name,
             "description": description,
             "parameters": [
                 "type": "object",
@@ -71,7 +71,7 @@ class FindFile: PermissionAware {
 
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": FindFile.name,
             "description": description,
             "input_schema": openAISchema()["parameters"] as? [String : Any] ?? [:]
         ]
@@ -81,7 +81,7 @@ class FindFile: PermissionAware {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": FindFile.name,
                 "description": description,
                 "parameters": openAISchema()["parameters"] as? [String : Any] ?? [:]
             ]

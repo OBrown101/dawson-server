@@ -8,12 +8,12 @@
 import Foundation
 
 class MempalaceDiaryWrite: Tool {
-    let name = "mempalace_diary_write"
+    static let name = "mempalace_diary_write"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MempalaceDiaryWrite.name,
             "description": "Write to your personal agent diary in AAAK format. Your observations, thoughts, what you worked on, what matters. Each agent has their own diary with full history. Write in AAAK for compression — e.g. 'SESSION:2026-04-04|built.palace.graph+diary.tools|ALC.req:agent.diaries.in.aaak|★★★'. Use entity codes from the AAAK spec.",
             "parameters": [
                 "type": "object",
@@ -38,7 +38,7 @@ class MempalaceDiaryWrite: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MempalaceDiaryWrite.name,
             "description": "Write to your personal agent diary in AAAK format. Your observations, thoughts, what you worked on, what matters. Each agent has their own diary with full history. Write in AAAK for compression — e.g. 'SESSION:2026-04-04|built.palace.graph+diary.tools|ALC.req:agent.diaries.in.aaak|★★★'. Use entity codes from the AAAK spec.",
             "input_schema": [
                 "type": "object",
@@ -65,7 +65,7 @@ class MempalaceDiaryWrite: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MempalaceDiaryWrite.name,
                 "description": "Write to your personal agent diary in AAAK format. Your observations, thoughts, what you worked on, what matters. Each agent has their own diary with full history. Write in AAAK for compression — e.g. 'SESSION:2026-04-04|built.palace.graph+diary.tools|ALC.req:agent.diaries.in.aaak|★★★'. Use entity codes from the AAAK spec.",
                 "parameters": [
                     "type": "object",
@@ -91,6 +91,6 @@ class MempalaceDiaryWrite: Tool {
     
     func execute(args: [String: Any]) -> String {
         print("DIARY WRITE (\(args["agent_name"] ?? "")): ", args["entry"] ?? "")
-        return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
+        return MempalaceMemory.shared.mempalaceExec(name: MempalaceDiaryWrite.name, args: args)
     }
 }

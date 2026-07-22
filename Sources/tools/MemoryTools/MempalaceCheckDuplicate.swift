@@ -8,12 +8,12 @@
 import Foundation
 
 class MempalaceCheckDuplicate: Tool {
-    let name = "mempalace_check_duplicate"
+    static let name = "mempalace_check_duplicate"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MempalaceCheckDuplicate.name,
             "description": "Check if content already exists in the palace before filing",
             "parameters": [
                 "type": "object",
@@ -35,7 +35,7 @@ class MempalaceCheckDuplicate: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MempalaceCheckDuplicate.name,
             "description": "Check if content already exists in the palace before filing",
             "input_schema": [
                 "type": "object",
@@ -59,7 +59,7 @@ class MempalaceCheckDuplicate: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MempalaceCheckDuplicate.name,
                 "description": "Check if content already exists in the palace before filing",
                 "parameters": [
                     "type": "object",
@@ -80,6 +80,6 @@ class MempalaceCheckDuplicate: Tool {
     }
     
     func execute(args: [String: Any]) -> String {
-        return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
+        return MempalaceMemory.shared.mempalaceExec(name: MempalaceCheckDuplicate.name, args: args)
     }
 }

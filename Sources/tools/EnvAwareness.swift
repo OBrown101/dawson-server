@@ -8,7 +8,7 @@
 import Foundation
 
 class EnvAwareness: PermissionAware {
-    let name = "environmental_awareness"
+    static let name = "environmental_awareness"
     
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
         return [
@@ -19,7 +19,7 @@ class EnvAwareness: PermissionAware {
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": EnvAwareness.name,
             "description": "Provides agent with current environmental awareness data such as time/date, timezone, operating system, DAWSON project root directory, etc.",
             "parameters": [
                 "type": "object",
@@ -30,7 +30,7 @@ class EnvAwareness: PermissionAware {
     }
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": EnvAwareness.name,
             "description": "Provides agent with current environmental awareness data such as time/date, timezone, operating system, DAWSON project root directory, etc.",
             "input_schema": [
                 "type": "object",
@@ -44,7 +44,7 @@ class EnvAwareness: PermissionAware {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": EnvAwareness.name,
                 "description": "Provides agent with current environmental awareness data such as time/date, timezone, operating system, DAWSON project root and directory, etc.",
                 "parameters": [
                     "type": "object",
@@ -64,7 +64,6 @@ class EnvAwareness: PermissionAware {
         
         let dateString = formatter.string(from: now)
         let timezoneName = TimeZone.current.identifier
-        let user = NSUserName()
 
         let info = """
         Date & time: \(dateString)

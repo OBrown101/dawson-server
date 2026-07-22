@@ -8,12 +8,12 @@
 import Foundation
 
 class GetFullSkill: Tool {
-    let name = "get_full_skill"
+    static let name = "get_full_skill"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": GetFullSkill.name,
             "description": """
             Loads the full contents of a skill's SKILL.md file using the skill name. Use this when a task matches one of the available skill summaries and the agent needs the detailed instructions.
             """,
@@ -32,7 +32,7 @@ class GetFullSkill: Tool {
 
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": GetFullSkill.name,
             "description": """
             Loads the full contents of a skill's SKILL.md file using the skill name. Use this when a task matches one of the available skill summaries and the agent needs the detailed instructions.
             """,
@@ -53,7 +53,7 @@ class GetFullSkill: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": GetFullSkill.name,
                 "description": "Loads the full contents of a skill's SKILL.md file using the skill name. Use this when a task matches one of the available skill summaries and the agent needs the detailed instructions.",
                 "parameters": [
                     "type": "object",

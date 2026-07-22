@@ -8,12 +8,12 @@
 import Foundation
 
 class MempalaceTool: Tool {
-    let name = "mempalace"
+    static let name = "mempalace"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MempalaceTool.name,
             "description": """
             Interface to the Mempalace MCP memory system.
             Used for storing, retrieving, and searching long-term memory, conversation history, and semantic context.
@@ -43,7 +43,7 @@ class MempalaceTool: Tool {
     
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MempalaceTool.name,
             "description": """
             Interface to the Mempalace MCP memory system.
             Used for storing, retrieving, and searching long-term memory, conversation history, and semantic context.
@@ -75,7 +75,7 @@ class MempalaceTool: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MempalaceTool.name,
                 "description": """
                 Interface to the Mempalace MCP memory system.
                 Used for storing, retrieving, and searching long-term memory, conversation history, and semantic context.

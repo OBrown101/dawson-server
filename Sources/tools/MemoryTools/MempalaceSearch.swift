@@ -8,12 +8,12 @@
 import Foundation
 
 class MempalaceSearch: Tool {
-    let name = "mempalace_search"
+    static let name = "mempalace_search"
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": MempalaceSearch.name,
             "description": "Semantic search with wing/room filters",
             "parameters": [
                 "type": "object",
@@ -42,7 +42,7 @@ class MempalaceSearch: Tool {
 
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": MempalaceSearch.name,
             "description": "Semantic search with wing/room filters",
             "input_schema": [
                 "type": "object",
@@ -73,7 +73,7 @@ class MempalaceSearch: Tool {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": MempalaceSearch.name,
                 "description": "Semantic search with wing/room filters",
                 "parameters": [
                     "type": "object",
@@ -102,6 +102,6 @@ class MempalaceSearch: Tool {
     }
     
     func execute(args: [String: Any]) -> String {
-        return MempalaceMemory.shared.mempalaceExec(name: name, args: args)
+        return MempalaceMemory.shared.mempalaceExec(name: MempalaceSearch.name, args: args)
     }
 }

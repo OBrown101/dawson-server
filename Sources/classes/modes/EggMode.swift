@@ -28,6 +28,14 @@ class EggMode: Mode {
                 evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Command execution is forbidden in this chat's current mode.")))
             case .sudo:
                 evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Sudo access is forbidden in this chat's current mode.")))
+            case .delegate:
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Delegating to or messaging other agents is forbidden in this chat's current mode.")))
+            case .install:
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Installing packages, software, etc. is forbidden in this chat's current mode.")))
+            case .web:
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Web access is forbidden in this chat's current mode.")))
+            case .harness:
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Modifying the harness is forbidden in this chat's current mode.")))
             }
         }
         return evaluations
@@ -45,21 +53,21 @@ class EggMode: Mode {
             return "Command execution is not permitted in Egg mode."
         case .sudo:
             return "Elevated privileges are not permitted in Egg mode."
+        case .delegate:
+            return "Delegating to or messaging other agents is not permitted in Egg mode."
+        case .install:
+            return "Installing Python packages, software, etc. is not permitted in Egg mode."
+        case .web:
+            return "Web access is not permitted in Egg mode."
+        case .harness:
+            return "Modifying the harness (e.g. promoting shared tools) is not permitted in Egg mode."
         }
     }
     
     static func guardRequests(_ requests: [PermissionRequest], agent: Agent) throws {
         for request in requests {
             switch request.action {
-            case .all:
-                throw ModePermissionError.forbidden
-            case .read:
-                throw ModePermissionError.forbidden
-            case .write:
-                throw ModePermissionError.forbidden
-            case .command:
-                throw ModePermissionError.forbidden
-            case .sudo:
+            case .all, .read, .write, .command, .sudo, .delegate, .install, .web, .harness:
                 throw ModePermissionError.forbidden
             }
         }

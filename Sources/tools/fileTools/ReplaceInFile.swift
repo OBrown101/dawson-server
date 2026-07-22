@@ -8,7 +8,7 @@
 import Foundation
 
 class ReplaceInFile: PermissionAware {
-    let name = "replace_in_file"
+    static let name = "replace_in_file"
 
     private let toolDescription = """
         Replaces exact text in a file. The 'old' text must match the file content \
@@ -57,7 +57,7 @@ class ReplaceInFile: PermissionAware {
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
-            "name": name,
+            "name": ReplaceInFile.name,
             "description": toolDescription,
             "parameters": parametersSchema
         ]
@@ -65,7 +65,7 @@ class ReplaceInFile: PermissionAware {
 
     func anthropicSchema() -> [String : Any] {
         return [
-            "name": name,
+            "name": ReplaceInFile.name,
             "description": toolDescription,
             "input_schema": parametersSchema
         ]
@@ -75,7 +75,7 @@ class ReplaceInFile: PermissionAware {
         return [
             "type": "function",
             "function": [
-                "name": name,
+                "name": ReplaceInFile.name,
                 "description": toolDescription,
                 "parameters": parametersSchema
             ]
