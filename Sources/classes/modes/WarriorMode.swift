@@ -19,17 +19,17 @@ class WarriorMode: Mode {
         for request in requests {
             switch request.action {
             case .all:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Full permission access is forbidden in this chat's mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Permission denied: Full permission access is forbidden in this chat's mode.")))
             case .read, .write:
                 evaluations.append(evaluateReadWrite(request, agent: agent))
             case .delegate:
                 evaluations.append(PermissionEvaluation(request: request, decision: .allowed))
             case .install:
-                evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Installing a package, software, etc. permanently alters the shared Python environment and requires your approval.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: request.reason ?? "Installing a package, software, etc. permanently alters the shared Python environment and requires your approval.")))
             case .web:
                 evaluations.append(PermissionEvaluation(request: request, decision: .allowed))
             case .harness:
-                evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Modifying the harness affects all future agents and requires your approval.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: request.reason ?? "Modifying the harness affects all future agents and requires your approval.")))
             }
         }
         return evaluations
@@ -37,12 +37,12 @@ class WarriorMode: Mode {
     
     static func evaluateReadWrite(_ request: PermissionRequest, agent: Agent) -> PermissionEvaluation {
         guard let path = request.target else {
-            return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Missing \(request.action.rawValue) target path."))
+            return PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Permission denied: Missing \(request.action.rawValue) target path."))
         }
         if (FileUtilities.inSessionDirectories(path: path, directories: agent.effectiveDirectories)) {
             return PermissionEvaluation(request: request, decision: .allowed)
         } else {
-            return PermissionEvaluation(request: request, decision: .requiresApproval(reason: "\(request.action.rawValue.capitalized) outside session workspace: \(path)"))
+            return PermissionEvaluation(request: request, decision: .requiresApproval(reason: request.reason ?? "\(request.action.rawValue.capitalized) outside session workspace: \(path)"))
         }
     }
     

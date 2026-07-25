@@ -19,19 +19,19 @@ class FledglingMode: Mode {
         for request in requests {
             switch request.action {
             case .all:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Full permission access is forbidden in this chat's mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Full permission access is forbidden in this chat's mode.")))
             case .read:
                 evaluations.append(evaluateRead(request, agent: agent))
             case .write:
                 evaluations.append(evaluateWrite(request, agent: agent))
             case .delegate:
-                evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Delegating to or messaging another agent requires your approval in Fledgling mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: request.reason ?? "Delegating to or messaging another agent requires your approval in Fledgling mode.")))
             case .install:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Installing packages, software, etc. is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Installing packages, software, etc. is forbidden in this chat's current mode.")))
             case .web:
-                evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Web access requires your approval in Fledgling mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: request.reason ?? "Web access requires your approval in Fledgling mode.")))
             case .harness:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Modifying the harness is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Modifying the harness is forbidden in this chat's current mode.")))
             }
         }
         return evaluations
@@ -39,24 +39,24 @@ class FledglingMode: Mode {
     
     static func evaluateRead(_ request: PermissionRequest, agent: Agent) -> PermissionEvaluation {
         guard let path = request.target else {
-            return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Missing read target path."))
+            return PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Permission denied: Missing read target path."))
         }
         if (FileUtilities.inSessionDirectories(path: path, directories: agent.effectiveDirectories)) {
             return PermissionEvaluation(request: request, decision: .allowed)
         } else {
-            return PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Read outside session workspace: \(path)"))
+            return PermissionEvaluation(request: request, decision: .requiresApproval(reason: request.reason ?? "Read outside session workspace: \(path)"))
         }
     }
     
     static func evaluateWrite(_ request: PermissionRequest, agent: Agent) -> PermissionEvaluation {
         guard let path = request.target else {
-            return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Missing write target path."))
+            return PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Permission denied: Missing write target path."))
         }
 
         if (FileUtilities.inSessionDirectories(path: path, directories: agent.effectiveDirectories)) {
-            return PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Write operation requires user approval: \(path)"))
+            return PermissionEvaluation(request: request, decision: .requiresApproval(reason: request.reason ?? "Write operation requires user approval: \(path)"))
         } else {
-            return PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Writes outside workspace are forbidden."))
+            return PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Permission denied: Writes outside workspace are forbidden."))
         }
     }
     

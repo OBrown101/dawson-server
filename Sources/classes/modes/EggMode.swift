@@ -19,19 +19,19 @@ class EggMode: Mode {
         for request in requests {
             switch request.action {
             case .all:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Full permission access is forbidden in this chat's mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Permission denied: Full permission access is forbidden in this chat's mode.")))
             case .read:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Reading files is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Permission denied: Reading files is forbidden in this chat's current mode.")))
             case .write:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Writing to files is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Permission denied: Writing to files is forbidden in this chat's current mode.")))
             case .delegate:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Delegating to or messaging other agents is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Permission denied: Delegating to or messaging other agents is forbidden in this chat's current mode.")))
             case .install:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Installing packages, software, etc. is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Permission denied: Installing packages, software, etc. is forbidden in this chat's current mode.")))
             case .web:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Web access is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Permission denied: Web access is forbidden in this chat's current mode.")))
             case .harness:
-                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: "Permission denied: Modifying the harness is forbidden in this chat's current mode.")))
+                evaluations.append(PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Permission denied: Modifying the harness is forbidden in this chat's current mode.")))
             }
         }
         return evaluations
