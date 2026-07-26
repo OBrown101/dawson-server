@@ -1,61 +1,48 @@
+//
+//  Provider.swift
+//
+//
+//  Created by Ethan Brown on 3/19/26.
+//
+
 import Foundation
 import AnyCodable
 
-struct ProviderResponse {
-    var createdAt: String
-    var providerType: ProviderClient.ProviderType
-    var model: String
-    var content: String
-    var thinking: String = ""
-    var toolCalls: [[String: Any]] = []
-    var totalElapsedSec: Int = 0
-    var error: Error? = nil
-}
-
-struct LLMModel: Codable, Identifiable {
-    var id: String
-    var name: String
-    var provider: ProviderClient.ProviderType
-}
-
-protocol LLMProvider {
-    func fetchModels() async throws -> [LLMModel]
-    
-    func send(
-        messages: [Message],
-        model: LLMModel,
-        tools: [Tool],
-        useThinking: Bool,
-        contextWindow: Int32,
-        onUpdate: @Sendable @escaping (ProviderResponse) async -> Void
-    ) async -> ProviderResponse
-}
-
 class Provider: Codable {
     let type: ProviderClient.ProviderType
-    let apiKey: String
-    let models: [LLMModel]
-    let updatedTimestamp: Int64
+    var apiKey: String
+    var useOAuth: Bool
+    var availableModels: [LLMModel]
+    var preferredModelIDs: [String]
+    var defaultModelID: String
+    var updatedTimestamp: Int64
     
-    init(type: ProviderClient.ProviderType, apiKey: String, models: [LLMModel], updatedTimestamp: Int64 = Date.now.epochMillis) {
+    static let providersDirectory = DAWSON.databank.appendingPathComponent("providers")
+    static let providersMetadataDirectory = providersDirectory.appendingPathComponent("metadata")
+    
+    var defaultModel: LLMModel? {
+        availableModels.first(where: { $0.id == defaultModelID }) ?? availableModels.first
+    }
+    
+    var preferredModels: [LLMModel] {
+        availableModels.filter { preferredModelIDs.contains($0.id) }
+    }
+    
+    init(type: ProviderClient.ProviderType,
+         apiKey: String = "",
+         useOAuth: Bool = false,
+         availableModels: [LLMModel] = [],
+         preferredModelIDs: [String] = [],
+         defaultModelID: String = "",
+         updatedTimestamp: Int64 = Date.now.epochMillis
+    ) {
         self.type = type
         self.apiKey = apiKey
-        self.models = models
+        self.availableModels = availableModels
+        self.preferredModelIDs = preferredModelIDs
+        self.defaultModelID = defaultModelID
+        self.useOAuth = useOAuth
         self.updatedTimestamp = updatedTimestamp
-    }
-    
-    static func getProviders() async -> [Provider] {
-        var providers: [Provider] = []
-        for type in ProviderClient.ProviderType.allCases {
-            let models = try? await fetchModels(for: type)
-            providers.append(Provider(type: type, apiKey: (type.apiKey ?? ""), models: (models ?? [])))
-        }
-        return providers
-    }
-    
-    static func getProvider(_ type: ProviderClient.ProviderType) async -> Provider {
-        let models = try? await fetchModels(for: type)
-        return Provider(type: type, apiKey: (type.apiKey ?? ""), models: (models ?? []))
     }
     
     static func provider(for type: ProviderClient.ProviderType) -> LLMProvider {
@@ -68,9 +55,46 @@ class Provider: Codable {
             return AnthropicProvider()
         }
     }
+}
+
+extension Provider {
     
-    static func fetchModels(for type: ProviderClient.ProviderType) async throws -> [LLMModel] {
-        let provider = Provider.provider(for: type)
-        return try await provider.fetchModels()
+    static func loadAllProviders() -> [Provider] {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: providersMetadataDirectory, includingPropertiesForKeys: nil) else { return [] }
+
+        var providers: [Provider] = []
+        for fileURL in files {
+            guard fileURL.pathExtension == "json",
+                  let data = try? Data(contentsOf: fileURL),
+                  let provider = try? JSONDecoder().decode(Provider.self, from: data) else { continue }
+
+            providers.append(provider)
+        }
+
+        return providers
+    }
+    
+    static func loadProvider(providerName: String) -> Provider? {
+        let url = metadataURL(providerName: providerName)
+        guard let data = try? Data(contentsOf: url),
+              let provider = try? JSONDecoder().decode(Provider.self, from: data) else { return nil }
+        
+        return provider
+    }
+    
+    func saveMetadata() {
+        do {
+            try FileManager.default.createDirectory(at: Provider.providersMetadataDirectory, withIntermediateDirectories: true)
+
+            let data = try JSONEncoder().encode(self)
+            try data.write(to: Provider.metadataURL(providerName: type.rawValue), options: .atomic)
+            print("Successfully saved Provider \(type.rawValue) metadata")
+        } catch {
+            print("Failed to save Provider \(type.rawValue) metadata: ", error)
+        }
+    }
+    
+    private static func metadataURL(providerName: String) -> URL {
+        return Provider.providersMetadataDirectory.appendingPathComponent("\(providerName).json")
     }
 }

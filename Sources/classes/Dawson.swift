@@ -25,6 +25,9 @@ class DAWSON: @unchecked Sendable {
 
     static let databank = DAWSON.root
         .appendingPathComponent("databank")
+    
+    static let security = DAWSON.databank
+        .appendingPathComponent("security")
 
     static let primaryChatUUID = "PRIMARY_CHAT"
     static let primaryAgentUUID = "PRIMARY_AGENT"
@@ -97,7 +100,7 @@ extension DAWSON {
             return
         }
         
-        guard let model = await Provider.getProviders().flatMap({ $0.models }).first else {
+        guard let model = ProviderHandler.shared.getProviders().compactMap({ $0.defaultModel }).first else {
             print("No models available to create Primary Chat for user (\(userUUID))")
             return
         }
@@ -117,7 +120,7 @@ extension DAWSON {
             return
         }
         
-        guard let model = await Provider.getProviders().flatMap({ $0.models }).first else {
+        guard let model = ProviderHandler.shared.getProviders().compactMap({ $0.defaultModel }).first else {
             print("No models available to create Primary Chat for user (\(userUUID))")
             return
         }
@@ -213,6 +216,20 @@ extension DAWSON {
             agentUUID: agent.uuid,
             providerType: nil,
             dataType: .deleteAgent,
+            payload: payload
+        )
+        let response = WSPacket(type: .configData, payload: AnyCodable(configData))
+        server.broadcast(response)
+    }
+    
+    func broadcastProviderUpsert(_ provider: Provider) {
+        guard let encoded = try? JSONEncoder().encode(provider),
+              let payload = try? JSONDecoder().decode(AnyCodable.self, from: encoded) else { return }
+        let configData = ConfigData(
+            userUUID: nil,
+            agentUUID: nil,
+            providerType: provider.type,
+            dataType: .updateProvider,
             payload: payload
         )
         let response = WSPacket(type: .configData, payload: AnyCodable(configData))

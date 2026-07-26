@@ -24,5 +24,6 @@ struct ConfigData: Codable {
         case syncUsers = "SYNC_USERS"
         case updateProvider = "UPDATE_PROVIDER"
         case syncProviders = "SYNC_PROVIDERS"
+        case loginOAuth = "LOGIN_OAUTH"
     }
 }

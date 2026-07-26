@@ -23,25 +23,6 @@ class ServerSettings: @unchecked Sendable {
         }
     }
     
-    private let UserDefault_ProviderAPIKeys = "UserDefault_ProviderAPIKeys"
-    var providerAPIKeys: [ProviderClient.ProviderType: String] {
-        get {
-            let saved = UserDefaults.standard.dictionary(forKey: UserDefault_ProviderAPIKeys) as? [String: String] ?? [:]
-
-            return Dictionary(uniqueKeysWithValues: saved.compactMap { key, value in
-                guard let type = ProviderClient.ProviderType(rawValue: key) else { return nil }
-                return (type, value)
-            })
-        }
-        set {
-            let raw = Dictionary(uniqueKeysWithValues: newValue.map {
-                ($0.key.rawValue, $0.value)
-            })
-
-            UserDefaults.standard.set(raw, forKey: UserDefault_ProviderAPIKeys)
-        }
-    }
-    
     private let UserDefault_DawsonLLMModel = "UserDefault_DawsonLLMModel"
     var dawsonLLMModel: String? {
         get {

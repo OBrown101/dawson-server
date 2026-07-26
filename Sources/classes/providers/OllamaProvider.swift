@@ -87,7 +87,7 @@ final class OllamaProvider: LLMProvider {
         return response
     }
     
-    func fetchModels() async throws -> [LLMModel] {
+    static func fetchModels(useOAuth: Bool) async throws -> [LLMModel] {
         let json = try await ProviderClient.shared.fetchJSON(llmType: .ollama)
 
         guard let models = json["models"] as? [[String: Any]] else {

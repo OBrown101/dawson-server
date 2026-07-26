@@ -37,13 +37,31 @@ final class ProviderClient: Sendable {
             }
         }
         
-        var apiKey: String? {
-            let apiKeys = ServerSettings.shared.providerAPIKeys
-            return apiKeys[self]
+        var supportsOAuth: Bool {
+            switch self {
+            case .ollama:
+                return false
+            case .openai:
+                return true
+            case .anthropic:
+                return false
+            }
         }
         
-        static func setAPIKey(_ type: ProviderType, key: String) {
-            ServerSettings.shared.providerAPIKeys[type] = key
+        var apiKey: String? {
+            return ProviderHandler.shared.getAPIKey(self)
+        }
+        
+        func fetchModels(useOAuth: Bool) async throws -> [LLMModel] {
+            let oauth = (!supportsOAuth) ? false : useOAuth
+            switch self {
+            case .ollama:
+                return try await OllamaProvider.fetchModels(useOAuth: oauth)
+            case .openai:
+                return try await OpenAIProvider.fetchModels(useOAuth: oauth)
+            case .anthropic:
+                return try await AnthropicProvider.fetchModels(useOAuth: oauth)
+            }
         }
     }
     
@@ -69,12 +87,23 @@ final class ProviderClient: Sendable {
                     
                     switch (llmType) {
                     case .openai:
-                        guard let key = llmType.apiKey,
-                                (!key.isEmpty) else {
-                            throw NSError(domain: "LLMClient", code: -2, userInfo: [NSLocalizedDescriptionKey: "Missing OpenAI API key"])
+                        // Eventually should have a switch (in Beakshield) allow user turn off provider
+                        if let key = llmType.apiKey,
+                           (!key.isEmpty) {
+                            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+                        } else if (OpenAIOAuth.shared.isActive) {
+                                // ChatGPT subscription mode → Codex backend
+                                let tokens = try await OpenAIOAuth.shared.validAccessToken()
+                                request.url = URL(string: OpenAIOAuth.codexEndpointURL)!
+                                request.setValue("Bearer \(tokens.accessToken)", forHTTPHeaderField: "Authorization")
+                                request.setValue(tokens.accountId, forHTTPHeaderField: "chatgpt-account-id")
+                                request.setValue("responses=experimental", forHTTPHeaderField: "OpenAI-Beta")
+                                request.setValue("codex_cli_rs", forHTTPHeaderField: "originator")
+                                request.setValue(UUID().uuidString, forHTTPHeaderField: "session_id")
+                        } else {
+                            throw NSError(domain: "LLMClient", code: -2, userInfo: [NSLocalizedDescriptionKey: "Missing OpenAI API key and no OAuth available."])
                         }
-                        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-                    
+                        
                     case .anthropic:
                         guard let key = llmType.apiKey,
                                 (!key.isEmpty) else {

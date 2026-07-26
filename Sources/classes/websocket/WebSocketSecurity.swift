@@ -9,14 +9,13 @@ import Foundation
 
 final class WebSocketSecurity {
     
-    static let directory = DAWSON.databank.appendingPathComponent("security")
-    static let certPath = directory.appendingPathComponent("fullchain.pem")
-    static let keyPath = directory.appendingPathComponent("privkey.pem")
-    static let tokenPath = directory.appendingPathComponent("auth-token.txt")
-    static let fingerprintPath = directory.appendingPathComponent("auth-fingerprint.txt")
+    static let certPath = DAWSON.security.appendingPathComponent("fullchain.pem")
+    static let keyPath = DAWSON.security.appendingPathComponent("privkey.pem")
+    static let tokenPath = DAWSON.security.appendingPathComponent("auth-token.txt")
+    static let fingerprintPath = DAWSON.security.appendingPathComponent("auth-fingerprint.txt")
 
     static func setup() throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: DAWSON.security, withIntermediateDirectories: true)
 
         let didCreateCertificate: Bool
         

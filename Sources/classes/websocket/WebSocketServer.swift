@@ -217,6 +217,7 @@ extension WebSocketServer {
             }
         case .dataPrompt:
             break
+            
         case .cancelCmd:
             await dawson.cancelAgentRun(agentUUID: userData.agentUUID)
             
@@ -406,19 +407,16 @@ extension WebSocketServer {
             self.sendTask(response, ws: ws)
             
         case .updateProvider:
-            guard let providerAPIKeys: [String: String] = guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
-            providerAPIKeys.forEach { providerName, apiKey in
-                guard let providerType = ProviderClient.ProviderType(rawValue: providerName) else { return }
-                ProviderClient.ProviderType.setAPIKey(providerType, key: apiKey)
-            }
+            guard let provider: Provider = guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
+            ProviderHandler.shared.updateProvider(provider: provider)
             
         case .syncProviders:
             var payload: AnyCodable
             var respDataType = configData.dataType
             if let providerType = configData.providerType {
-                payload = await AnyCodable(Provider.getProvider(providerType))
+                payload = AnyCodable(ProviderHandler.shared.getProvider(providerType))
             } else {
-                payload = await AnyCodable(Provider.getProviders())
+                payload = AnyCodable(ProviderHandler.shared.getProviders())
             }
             
             let configData = ConfigData(
@@ -430,6 +428,10 @@ extension WebSocketServer {
             )
             let response = WSPacket(type: .configData, payload: AnyCodable(configData))
             self.sendTask(response, ws: ws)
+            
+        case .loginOAuth:
+            guard let providerType: ProviderClient.ProviderType = guardPayload(configData.payload, dataType: configData.dataType.rawValue, ws: ws) else { return }
+            ProviderHandler.shared.loginOAuth(providerType)
         }
     }
     
@@ -446,7 +448,7 @@ extension WebSocketServer {
             states[user.uuid] = user.updatedTimestamp
         }
 
-        let providers = await Provider.getProviders()
+        let providers = ProviderHandler.shared.getProviders()
         let providerStates = providers.reduce(into: [String: Int64]()) { states, provider in
             states[provider.type.rawValue] = provider.updatedTimestamp
         }

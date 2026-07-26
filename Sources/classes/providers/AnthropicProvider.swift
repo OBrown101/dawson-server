@@ -146,7 +146,7 @@ final class AnthropicProvider: LLMProvider {
         return response
     }
     
-    func fetchModels() async throws -> [LLMModel] {
+    static func fetchModels(useOAuth: Bool) async throws -> [LLMModel] {
         let json = try await ProviderClient.shared.fetchJSON(llmType: .anthropic)
 
         guard let data = json["data"] as? [[String: Any]] else { return [] }
