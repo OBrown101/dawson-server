@@ -10,6 +10,7 @@ import Foundation
 struct Message: Codable, Sendable {
     let uuid: String
     let runUUID: String
+    let originActor: String?
     let createdAt: Date
     let model: String
     let role: String
@@ -18,9 +19,10 @@ struct Message: Codable, Sendable {
     let toolCalls: [ToolCall]?
     let attachments: [ImageAttachment]?
     
-    init(uuid: String = UUID().uuidString, runUUID: String, createdAt: Date = Date.now, model: String = "", role: String, text: String?, toolCallId: String? = nil, toolCalls: [ToolCall]? = nil, attachments: [ImageAttachment]? = nil) {
+    init(uuid: String = UUID().uuidString, runUUID: String, originActor: String? = nil, createdAt: Date = Date.now, model: String = "", role: String, text: String?, toolCallId: String? = nil, toolCalls: [ToolCall]? = nil, attachments: [ImageAttachment]? = nil) {
         self.uuid = uuid
         self.runUUID = runUUID
+        self.originActor = originActor
         self.createdAt = createdAt
         self.model = model
         self.role = role

@@ -24,8 +24,7 @@ final class OpenAIProvider: LLMProvider {
             "stream": true
         ]
         
-        let apiKey = ProviderClient.ProviderType.openai.apiKey
-        if ((apiKey?.isEmpty ?? true) && OpenAIOAuth.shared.isActive) {
+        if (OpenAIOAuth.shared.isRouting) {
             payload["store"] = false    // required: backend is stateless
             payload["instructions"] = OpenAIOAuth.codexInstructions  // required: validated by OpenAI
         }
@@ -158,12 +157,12 @@ extension OpenAIProvider {
             // In ChatGPT OAuth mode, "instructions" occupied by Codex prompt
             // DAWSON system prompt rides along as a developer message instead.
             var role = message.role
-            if (OpenAIOAuth.shared.isActive && (role == MsgSource.system.name)) {
+            if (OpenAIOAuth.shared.isRouting && (role == MsgSource.system.name)) {
                 role = "developer"
             }
 
             result.append([
-                "role": message.role,
+                "role": role,
                 "content": openAIContent(for: message)
             ])
         }

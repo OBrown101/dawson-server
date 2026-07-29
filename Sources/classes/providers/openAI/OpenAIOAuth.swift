@@ -9,8 +9,25 @@ import Foundation
 import Network
 import CryptoKit
 
+private actor RefreshCoordinator {
+    private var inFlight: Task<OpenAIOAuth.OAuthTokens, Error>?
+
+    func refresh(_ operation: @Sendable @escaping () async throws -> OpenAIOAuth.OAuthTokens) async throws -> OpenAIOAuth.OAuthTokens {
+        if let inFlight {
+            // A refresh is already running; ride along instead of double-refreshing.
+            return try await inFlight.value
+        }
+        let task = Task { try await operation() }
+        inFlight = task
+        defer { inFlight = nil }
+        return try await task.value
+    }
+}
+
 final class OpenAIOAuth: @unchecked Sendable {
     static let shared = OpenAIOAuth()
+    
+    private let refreshCoordinator = RefreshCoordinator()
 
     static let clientId = "app_EMoamEEZ73f0CkXaXp7hrann"
     static let authorizeURL = "https://auth.openai.com/oauth/authorize"
@@ -25,6 +42,10 @@ final class OpenAIOAuth: @unchecked Sendable {
 
     var isActive: Bool {
         (tokens != nil)
+    }
+    
+    var isRouting: Bool {
+        return (isActive && (ProviderClient.ProviderType.openai.apiKey?.isEmpty ?? true))
     }
 
     init() {
@@ -76,27 +97,39 @@ final class OpenAIOAuth: @unchecked Sendable {
     }
 
     func validAccessToken() async throws -> OAuthTokens {
-        // Returns a valid access token, refreshing first if needed
-        
-        guard var current = tokens else {
+        guard let current = tokens else {
             throw NSError(domain: "OpenAIOAuth", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "Not logged in with ChatGPT"])
         }
         guard current.isNearExpiry else { return current }
 
-        let json = try await postToken(form: [
-            "grant_type": "refresh_token",
-            "refresh_token": current.refreshToken,
-            "client_id": Self.clientId,
-            "scope": "openid profile email"
-        ])
-        try store(tokenJSON: json, previousRefreshToken: current.refreshToken)
-        guard let refreshed = tokens else {
-            throw NSError(domain: "OpenAIOAuth", code: -3,
-                          userInfo: [NSLocalizedDescriptionKey: "Token refresh failed"])
+        return try await refreshCoordinator.refresh { [weak self] in
+            guard let self else {
+                throw NSError(domain: "OpenAIOAuth", code: -3,
+                              userInfo: [NSLocalizedDescriptionKey: "Token refresh failed"])
+            }
+            // Re-check inside the coordinator: a caller that queued behind a
+            // completed refresh should use the fresh token, not refresh again.
+            if let latest = self.tokens, (!latest.isNearExpiry) {
+                return latest
+            }
+            guard let stale = self.tokens else {
+                throw NSError(domain: "OpenAIOAuth", code: -2,
+                              userInfo: [NSLocalizedDescriptionKey: "Not logged in with ChatGPT"])
+            }
+            let json = try await self.postToken(form: [
+                "grant_type": "refresh_token",
+                "refresh_token": stale.refreshToken,
+                "client_id": Self.clientId,
+                "scope": "openid profile email"
+            ])
+            try self.store(tokenJSON: json, previousRefreshToken: stale.refreshToken)
+            guard let refreshed = self.tokens else {
+                throw NSError(domain: "OpenAIOAuth", code: -3,
+                              userInfo: [NSLocalizedDescriptionKey: "Token refresh failed"])
+            }
+            return refreshed
         }
-        current = refreshed
-        return current
     }
 
     func logout() {

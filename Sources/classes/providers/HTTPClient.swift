@@ -10,6 +10,8 @@ import Foundation
 final class ProviderClient: Sendable {
     static let shared = ProviderClient()
     
+    static let oauthSessionId = UUID().uuidString
+    
     enum ProviderType: String, Codable, CaseIterable {
         case ollama = "OLLAMA"
         case openai = "OPENAI"
@@ -88,18 +90,21 @@ final class ProviderClient: Sendable {
                     switch (llmType) {
                     case .openai:
                         // Eventually should have a switch (in Beakshield) allow user turn off provider
-                        if let key = llmType.apiKey,
-                           (!key.isEmpty) {
+                        if (OpenAIOAuth.shared.isRouting) {
+                            // ChatGPT subscription mode → Codex backend
+                            guard let codexURL = URL(string: OpenAIOAuth.codexEndpointURL) else {
+                                throw NSError(domain: "LLMClient", code: -5, userInfo: [NSLocalizedDescriptionKey: "Invalid Codex endpoint URL"])
+                            }
+                            let tokens = try await OpenAIOAuth.shared.validAccessToken()
+                            request.url = codexURL
+                            request.setValue("Bearer \(tokens.accessToken)", forHTTPHeaderField: "Authorization")
+                            request.setValue(tokens.accountId, forHTTPHeaderField: "chatgpt-account-id")
+                            request.setValue("responses=experimental", forHTTPHeaderField: "OpenAI-Beta")
+                            request.setValue("codex_cli_rs", forHTTPHeaderField: "originator")
+                            request.setValue(ProviderClient.oauthSessionId, forHTTPHeaderField: "session_id")
+                        } else if let key = llmType.apiKey,
+                                  (!key.isEmpty) {
                             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-                        } else if (OpenAIOAuth.shared.isActive) {
-                                // ChatGPT subscription mode → Codex backend
-                                let tokens = try await OpenAIOAuth.shared.validAccessToken()
-                                request.url = URL(string: OpenAIOAuth.codexEndpointURL)!
-                                request.setValue("Bearer \(tokens.accessToken)", forHTTPHeaderField: "Authorization")
-                                request.setValue(tokens.accountId, forHTTPHeaderField: "chatgpt-account-id")
-                                request.setValue("responses=experimental", forHTTPHeaderField: "OpenAI-Beta")
-                                request.setValue("codex_cli_rs", forHTTPHeaderField: "originator")
-                                request.setValue(UUID().uuidString, forHTTPHeaderField: "session_id")
                         } else {
                             throw NSError(domain: "LLMClient", code: -2, userInfo: [NSLocalizedDescriptionKey: "Missing OpenAI API key and no OAuth available."])
                         }

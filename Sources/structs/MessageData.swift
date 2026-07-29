@@ -16,6 +16,7 @@ struct MessageData: Codable, Equatable {
     let sourceType: SourceType
     let sourceUUID: String
     let destinationUUID: String
+    let originActor: String?
     let dataType: DataType
     let payload: AnyCodable
     
@@ -44,6 +45,7 @@ struct MessageData: Codable, Equatable {
             sourceType: (message.role == MsgSource.user.name) ? .prompt : .response,
             sourceUUID: (message.role == MsgSource.user.name) ? userUUID : agentUUID,
             destinationUUID: (message.role == MsgSource.user.name) ? agentUUID : userUUID,
+            originActor: message.originActor,
             dataType: .text,    // For now, in future will need to handle data from models
             payload: AnyCodable(text)
         )

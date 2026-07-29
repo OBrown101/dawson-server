@@ -39,6 +39,16 @@ class AgentHandler: @unchecked Sendable {
     func deleteAgent(_ agentUUID: String) {
         Task {
             await AgentRunRegistry.shared.cancelAgentRun(agentUUID: agentUUID)
+            AgentSuspensionRecord.deleteMetadata(agentUUID: agentUUID)
+            
+            let children = activeAgents.values.filter { $0.parentAgentUUID == agentUUID }
+            for child in children {
+                if let childChat = DAWSON.shared.getChatForAgent(child.uuid) {
+                    DAWSON.shared.deleteChat(childChat.uuid)   // also deletes the agent
+                } else {
+                    deleteAgent(child.uuid)
+                }
+            }
             
             let deletedAgent = activeAgents[agentUUID]
             activeAgents[agentUUID]?.deleteAll()
@@ -95,7 +105,7 @@ class AgentHandler: @unchecked Sendable {
         }
     }
     
-    func runAgent(runUUID: String, userUUID: String, agentUUID: String, prompt: String, onEvent: @escaping (@Sendable (_ event: AgentEvent, _ runUUID: String) async -> Void)) async -> [Message] {
+    func runAgent(runUUID: String, userUUID: String, agentUUID: String, prompt: String, originActor: String? = nil, onEvent: @escaping (@Sendable (_ event: AgentEvent, _ runUUID: String) async -> Void)) async -> [Message] {
         guard let agent = activeAgents[agentUUID] else { return [] }
         
         let systemPrompt = (agent.getHistory().isEmpty) ? Loader.shared.buildBaseSystemPrompt(agent: agent.type) : ""
@@ -103,7 +113,7 @@ class AgentHandler: @unchecked Sendable {
         let task = Task<[Message], Error> {
             try Task.checkCancellation()
 
-            return try await agent.runAgent(runUUID: runUUID, userPrompt: prompt, systemPrompt: systemPrompt, onEvent: onEvent)
+            return try await agent.runAgent(runUUID: runUUID, userPrompt: prompt, systemPrompt: systemPrompt, originActor: originActor, onEvent: onEvent)
         }
         await AgentRunRegistry.shared.register(runUUID: runUUID, agentUUID: agentUUID, task: task)
         

@@ -120,7 +120,8 @@ final class PythonSandbox {
             .joined(separator: ":")
 
         var env: [String: String] = [
-            "PATH": PythonEnv.pythonHome.appendingPathComponent("bin").path,
+            // Preserve a minimal, deterministic command path without inheriting host environment variables.
+            "PATH": PythonEnv.pythonHome.appendingPathComponent("bin").path + ":/usr/bin:/bin",
             "HOME": runTemp,
             "TMPDIR": runTemp,
             "PYTHONHOME": PythonEnv.pythonHome.path,

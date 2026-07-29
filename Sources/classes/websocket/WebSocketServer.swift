@@ -155,6 +155,13 @@ extension WebSocketServer {
         case .textPrompt:
             guard let textPrompt: String = guardPayload(userData.payload, dataType: userData.dataType.rawValue, ws: ws) else { return }
             
+            if let agent = AgentHandler.shared.getAgent(userData.agentUUID),
+               (agent.parentAgentUUID != nil) {
+                // Dawson-operated worker: read-only for the user
+                // TODO: Possibly return error regarding it
+                return
+            }
+            
             let streamState = AgentEventStreamState()
             await dawson.getChatResponse(chatUUID: userData.chatUUID, runUUID: userData.dataUUID, prompt: textPrompt,
                 onEvent: { event, runUUID in

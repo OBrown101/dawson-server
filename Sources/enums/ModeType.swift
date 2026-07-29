@@ -16,6 +16,19 @@ enum ModeType: String, Codable, CaseIterable {
     static func fromName(_ name: String) -> ModeType? {
         return ModeType.allCases.first(where: { $0.rawValue == name })
     }
+    
+    var rank: Int {
+        switch self {
+        case .egg: return 0
+        case .fledgling: return 1
+        case .warrior: return 2
+        case .ultimate: return 3
+        }
+    }
+
+    static func lower(of a: ModeType, _ b: ModeType) -> ModeType {
+        return (a.rank <= b.rank) ? a : b
+    }
 }
 
 extension ModeType {

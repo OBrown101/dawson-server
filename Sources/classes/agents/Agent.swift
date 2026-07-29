@@ -56,6 +56,7 @@ class Agent: Codable, @unchecked Sendable {
     private var history: [Message] = []
     private var summary: String = ""
     var suspendData: SuspendData? = nil
+    var parentAgentUUID: String? = nil
     
     var provider: LLMProvider
     let runner: AgentRunner
@@ -73,7 +74,8 @@ class Agent: Codable, @unchecked Sendable {
             PromotePythonTool(workspace: { self.directories }),
             RunPythonScript(workspace: { self.directories }),
             RunPythonCode(workspace: { self.directories }),
-            RunCommand(workspace: { self.directories }, mode: { self.mode })
+            RunCommand(workspace: { self.directories }, mode: { self.mode }),
+            ListAgents(), TalkToAgent(), DelegateTask()
         ]
     }
     private static var requiredTools: [Tool] {
@@ -90,13 +92,22 @@ class Agent: Codable, @unchecked Sendable {
     }
     
     var effectiveMode: ModeType {
-        // TODO: Finish implementing once add delegation code
-        self.mode
+        guard let parentUUID = parentAgentUUID else { return mode }
+        guard let parent = AgentHandler.shared.getAgent(parentUUID) else { return .egg }
+        return ModeType.lower(of: mode, parent.effectiveMode)
     }
     
     var effectiveDirectories: [String] {
-        // TODO: Finish implementing once add delegation code
-        self.directories
+        guard let parentUUID = parentAgentUUID else { return directories }
+        guard let parent = AgentHandler.shared.getAgent(parentUUID) else { return [] }
+        let parentDirs = parent.effectiveDirectories.map(FileUtilities.canonicalFilePath)
+        return directories.filter { dir in
+            let child = FileUtilities.canonicalFilePath(dir)
+            return parentDirs.contains { root in
+                let r = root.hasSuffix("/") ? root : root + "/"
+                return (child == root) || (child + "/").hasPrefix(r)
+            }
+        }
     }
 
     init(
@@ -127,11 +138,13 @@ class Agent: Codable, @unchecked Sendable {
         
         provider = Provider.provider(for: model.provider)
         runner = AgentRunner()
+        restoreSavedSuspension()
     }
     
     enum CodingKeys: String, CodingKey {
         case uuid
         case userUUID
+        case parentAgentUUID
         case type
         case mode
         case model
@@ -149,6 +162,7 @@ class Agent: Codable, @unchecked Sendable {
 
         uuid = try container.decode(String.self, forKey: .uuid)
         userUUID = try container.decode(String.self, forKey: .userUUID)
+        parentAgentUUID = try container.decodeIfPresent(String.self, forKey: .parentAgentUUID)
         type = try container.decode(AgentType.self, forKey: .type)
         mode = try container.decode(ModeType.self, forKey: .mode)
         model = try container.decode(LLMModel.self, forKey: .model)
@@ -168,6 +182,7 @@ class Agent: Codable, @unchecked Sendable {
 
         try container.encode(uuid, forKey: .uuid)
         try container.encode(userUUID, forKey: .userUUID)
+        try container.encodeIfPresent(parentAgentUUID, forKey: .parentAgentUUID)
         try container.encode(type, forKey: .type)
         try container.encode(mode, forKey: .mode)
         try container.encode(model, forKey: .model)
@@ -198,6 +213,7 @@ class Agent: Codable, @unchecked Sendable {
         state = .ready
         saveMetadata()
         updatedTimestamp = Date.now.epochMillis
+        syncSavedSuspension()
         await runner.stop()
     }
     
@@ -217,6 +233,7 @@ class Agent: Codable, @unchecked Sendable {
             toolCalls: toolCalls,
             toolCallIndex: toolCallIndex
         )
+        syncSavedSuspension()
     }
 
     private func trimMessages(_ messages: [Message]) -> [Message] {
@@ -231,13 +248,21 @@ class Agent: Codable, @unchecked Sendable {
         guard let tool = tools.first(where: { $0.instanceName == toolCall.name }) else {
             return "Error: unknown tool '\(toolCall.name)'"
         }
-
+        
+        if let chatTool = tool as? ChatAware {
+            chatTool.setChat(DAWSON.shared.getChatForAgent(uuid))
+        }
+        
         return await tool.execute(args: toolCall.argDict)
     }
 
     private func runTool(_ toolCall: ToolCall) async -> ToolResult {
         guard let tool = tools.first(where: { $0.instanceName == toolCall.name }) else {
             return .denied("Error: unknown tool '\(toolCall.name)'")
+        }
+        
+        if let chatTool = tool as? ChatAware {
+            chatTool.setChat(DAWSON.shared.getChatForAgent(uuid))
         }
         
         if (toolCall.name == RequestUserInput.name) {
@@ -254,9 +279,12 @@ class Agent: Codable, @unchecked Sendable {
             return .suspended(request)
         }
         
-        if let permissionTool = tool as? PermissionAware {
+        let isBubbleResume = (tool as? DelegationBubbleAware)?.hasPendingUserResponse ?? false
+        
+        if (!isBubbleResume),
+            let permissionTool = tool as? PermissionAware {
             let requests = permissionTool.permissionRequests(args: toolCall.argDict)
-            let evaluations = mode.evaluateRequests(requests, agent: self)
+            let evaluations = effectiveMode.evaluateRequests(requests, agent: self)
             
             for evaluation in evaluations {
                 switch evaluation.decision {
@@ -278,16 +306,24 @@ class Agent: Codable, @unchecked Sendable {
                     return .suspended(request)
                 }
             }
-        } else if let chatTool = tool as? ChatAware {
-            chatTool.setChat(DAWSON.shared.getChatForAgent(uuid))
         }
-        return .completed(await tool.execute(args: toolCall.argDict))
+        
+        let output = await tool.execute(args: toolCall.argDict)
+        
+        // A delegation tool whose child suspended converts into OUR suspension.
+        if let bubbleTool = tool as? DelegationBubbleAware,
+           let bubbled = bubbleTool.consumePendingBubble() {
+            return .suspended(bubbled)
+        }
+        
+        return .completed(output)
     }
 
     func runAgent(
         runUUID: String,
         userPrompt: String,
         systemPrompt: String = "",
+        originActor: String? = nil,
         onEvent: @escaping (@Sendable (_ event: AgentEvent, _ runUUID: String) async -> Void)
     ) async throws -> [Message] {
         try await runner.start()
@@ -302,7 +338,7 @@ class Agent: Codable, @unchecked Sendable {
                 newMessages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: systemPrompt))
             }
             
-            newMessages.append(Message(runUUID: runUUID, role: MsgSource.user.name, text: userPrompt))
+            newMessages.append(Message(runUUID: runUUID, originActor: originActor, role: MsgSource.user.name, text: userPrompt))
             
             let (loopMessages, newState) = try await runInternalLoop(
                 runUUID: runUUID,
@@ -327,6 +363,8 @@ class Agent: Codable, @unchecked Sendable {
                 await onEvent(.agentState(newState), runUUID)
                 self.state = newState
             }
+            
+            syncSavedSuspension()
             
             await runner.stop()
             return loopMessages
@@ -354,33 +392,49 @@ class Agent: Codable, @unchecked Sendable {
             let toolCalls = suspendData.toolCalls
             var tcIndex = suspendData.toolCallIndex
             
+            var advanceIndex = true
+            
             if (toolCalls.indices.contains(tcIndex)) {
                 let tc = toolCalls[tcIndex]
                 
-                switch request.type {
-                case .permission:
-                    if (userResponse.accepted == true) {
-                        // Need to execute original tool that requested permission (to prevent re-triggering request)
-                        let toolOutput = await executeTool(tc)
-                        messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: toolOutput, toolCallId: tc.id))
-                        
-                        if (tc.name == ReadImage.name),
-                           let imageMessage = await AgentUtilities.messageFromImageTC(runUUID: runUUID, toolCall: tc) {
-                            messages.append(imageMessage)
+                if let bubbleTool = tools.first(where: { $0.instanceName == tc.name }) as? DelegationBubbleAware {
+                    // Stage the decision and DO NOT advance: the internal loop re-runs
+                    // this same tool call, whose resume leg relays the decision to the
+                    // suspended worker (the worker executes under its own mode). If the
+                    // worker suspends again, runTool's bubble intercept suspends us
+                    // again at this same index — arbitrarily deep approval chains work.
+                    bubbleTool.setUserResponse(userResponse)
+                    advanceIndex = false
+                } else {
+                    switch request.type {
+                    case .permission:
+                        if (userResponse.accepted == true) {
+                            // Need to execute original tool that requested permission (to prevent re-triggering request)
+                            let toolOutput = await executeTool(tc)
+                            messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: toolOutput, toolCallId: tc.id))
+                            
+                            if (tc.name == ReadImage.name),
+                               let imageMessage = await AgentUtilities.messageFromImageTC(runUUID: runUUID, toolCall: tc) {
+                                messages.append(imageMessage)
+                            }
+                        } else {
+                            messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse), toolCallId: tc.id))
                         }
-                    } else {
+                        
+                    case .confirmation:
+                        // Currently just inputs back into LLM, in future can be used for specific, binary requirements (not just approve/deny)
+                        messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse), toolCallId: tc.id))
+                        
+                    case .input:
                         messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse), toolCallId: tc.id))
                     }
-                case .confirmation:
-                    // Currently just inputs back into LLM, in future can be used for specific, binary requirements (not just approve/deny)
-                    messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse), toolCallId: tc.id))
-                case .input:
-                    messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.userInputText(request: request, response: userResponse), toolCallId: tc.id))
                 }
             }
             
             // Tool permission/input handled and tool executed (or not)
-            tcIndex += 1
+            if (advanceIndex) {
+                tcIndex += 1
+            }
             self.suspendData = nil
             let originalMessageCount = messages.count
             
@@ -412,6 +466,8 @@ class Agent: Codable, @unchecked Sendable {
                 self.state = newState
             }
             
+            syncSavedSuspension()
+            
             await runner.stop()
             return loopMessages
         } catch {
@@ -434,7 +490,7 @@ class Agent: Codable, @unchecked Sendable {
         var newMessages = startMessages
         
         let trimmedHistory = trimMessages(history)
-        let modeIterations = mode.iterationLimit ?? Int.max
+        let modeIterations = effectiveMode.iterationLimit ?? Int.max
         
         // Begins with last session data (if resuming a supension)
         var iterations = iterationIndex
@@ -499,7 +555,7 @@ class Agent: Codable, @unchecked Sendable {
             try Task.checkCancellation()
             
             let streamTempState = StreamTempState()
-            let availableTools = (self.mode == .egg) ? Agent.requiredTools : self.tools
+            let availableTools = (self.effectiveMode == .egg) ? Agent.requiredTools : self.tools
             let response = await provider.send(
                 messages: promptMessages,
                 model: model,
@@ -732,6 +788,7 @@ extension Agent {
                   let agent = try? JSONDecoder().decode(Agent.self, from: data) else { continue }
 
             agent.history = loadHistory(agentUUID: agent.uuid)
+            agent.restoreSavedSuspension()
             agents.append(agent)
         }
 
@@ -744,6 +801,7 @@ extension Agent {
               let agent = try? JSONDecoder().decode(Agent.self, from: data) else { return nil }
         
         agent.history = loadHistory(agentUUID: agentUUID)
+        agent.restoreSavedSuspension()
         return agent
     }
     
@@ -777,6 +835,7 @@ extension Agent {
     func deleteAll() {
         let metaURL = Agent.metadataURL(agentUUID: uuid)
         let historyURL = Agent.historyURL(agentUUID: uuid)
+        let suspensionURL = AgentSuspensionRecord.metadataURL(agentUUID: uuid)
 
         do {
             if FileManager.default.fileExists(atPath: metaURL.path) {
@@ -784,6 +843,9 @@ extension Agent {
             }
             if FileManager.default.fileExists(atPath: historyURL.path) {
                 try FileManager.default.removeItem(at: historyURL)
+            }
+            if FileManager.default.fileExists(atPath: suspensionURL.path) {
+                try FileManager.default.removeItem(at: suspensionURL)
             }
             print("Successfully deleted Agent \(uuid) data")
         } catch {
@@ -846,6 +908,40 @@ extension Agent {
     
     private func appendMessage(_ message: Message, agentUUID: String) {
         saveMessagesToHistory([message], agentUUID: agentUUID)
+    }
+}
+
+extension Agent {
+    func syncSavedSuspension() {
+        guard let suspendData = suspendData else {
+            AgentSuspensionRecord.deleteMetadata(agentUUID: uuid)
+            return
+        }
+
+        var bubbles: [String: PendingChildSuspension] = [:]
+        for tool in tools {
+            if let bubbleTool = tool as? DelegationBubbleAware,
+               let pendingState = bubbleTool.capturePendingState() {
+                bubbles[tool.instanceName] = pendingState
+            }
+        }
+
+        AgentSuspensionRecord(suspendData: suspendData, toolBubbles: bubbles).saveMetadata(agentUUID: uuid)
+    }
+    
+    func restoreSavedSuspension() {
+        guard let record = AgentSuspensionRecord.loadMetadata(agentUUID: uuid) else { return }
+
+        suspendData = record.suspendData
+        state = .awaitingInput
+
+        for tool in tools {
+            if let bubbleTool = tool as? DelegationBubbleAware {
+                bubbleTool.restorePendingState(record.toolBubbles[tool.instanceName])
+            }
+        }
+
+        print("Agent (\(uuid)) restored saved suspended session (run \(record.suspendData.runUUID)).")
     }
 }
 
@@ -977,7 +1073,7 @@ extension Agent {
         var messages: [Message] = []
         
         // Workspace prompt
-        if let workspacePrompt = AgentUtilities.getWorkspacesPrompt(mode: mode, directories) {
+        if let workspacePrompt = AgentUtilities.getWorkspacesPrompt(mode: effectiveMode, directories) {
             messages.append(Message(runUUID: runUUID, role: MsgSource.system.name, text: workspacePrompt))
         }
         
