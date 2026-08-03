@@ -10,6 +10,8 @@ struct PendingChildSuspension: Codable {
     enum Kind: Codable {
         case childRequest   // Running child suspended on permission/confirmation.
         case modeDiscrepancy(pendingMessage: String)    // Pre-flight approval to message user-owned agent outranking orchestrator; outbound message held until approved
+        case chatCreation(brief: String?, mode: ModeType, directories: [String], title: String)    // Approval to create a user-owned chat
+        case workerRelease    // Approval to hand a worker to the user
     }
 
     let kind: Kind

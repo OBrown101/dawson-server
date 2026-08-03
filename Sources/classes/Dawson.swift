@@ -30,7 +30,9 @@ class DAWSON: @unchecked Sendable {
         .appendingPathComponent("security")
 
     static let primaryChatUUID = "PRIMARY_CHAT"
+    static let primaryChatTitle = "Dawson"
     static let primaryAgentUUID = "PRIMARY_AGENT"
+    static let primaryAgentName = "Dawson"
 
     private var activeChats: [String: Chat] = [:]
 
@@ -95,7 +97,7 @@ class DAWSON: @unchecked Sendable {
 
 extension DAWSON {
     func createPrimaryChat(userUUID: String) async {
-        guard !activeChats.values.contains(where: { $0.userUUID == userUUID && $0.agentUUID == DAWSON.primaryAgentUUID }) else {
+        guard !activeChats.values.contains(where: { ($0.userUUID == userUUID) && ($0.agentUUID == DAWSON.primaryAgentUUID) }) else {
             print("Primary chat already exists for user (\(userUUID))")
             return
         }
@@ -105,7 +107,7 @@ extension DAWSON {
             return
         }
         AgentHandler.shared.spawnAgent(uuid: DAWSON.primaryAgentUUID, userUUID: userUUID, type: .dawson, model: model)
-        let newChat = Chat(uuid: DAWSON.primaryChatUUID, userUUID: userUUID, agentUUID: DAWSON.primaryAgentUUID)
+        let newChat = Chat(uuid: DAWSON.primaryChatUUID, userUUID: DAWSON.primaryChatTitle, agentUUID: userUUID, title: DAWSON.primaryAgentUUID)
         activeChats[DAWSON.primaryChatUUID] = newChat
         newChat.saveMetadata()
         print("Primary chat created for user (\(userUUID))")
@@ -180,6 +182,17 @@ extension DAWSON {
         server.broadcast(response)
     }
     
+    func broadcastChatMessages(_ chat: Chat) {
+        let chatData = ChatData(
+            chatUUID: chat.uuid,
+            userUUID: chat.userUUID,
+            agentUUID: chat.agentUUID,
+            dataType: .syncMsgs,
+            payload: AnyCodable(chat.messages)
+        )
+        server.broadcast(WSPacket(type: .chatData, payload: AnyCodable(chatData)))
+    }
+
     func broadcastChatDelete(_ chat: Chat) {
         guard let encoded = try? JSONEncoder().encode(chat.uuid),
               let payload = try? JSONDecoder().decode(AnyCodable.self, from: encoded) else { return }

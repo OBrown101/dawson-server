@@ -42,6 +42,8 @@ actor AgentRunner {
 class Agent: Codable, @unchecked Sendable {
     let uuid: String
     let userUUID: String
+    var parentAgentUUID: String?
+    var name: String
     let type: AgentType
     var mode: ModeType
     var model: LLMModel
@@ -50,13 +52,13 @@ class Agent: Codable, @unchecked Sendable {
     var contextWindow: Int32
     var useThinking: Bool
     var directories: [String]
+    let createdTimestamp: Int64
     var updatedTimestamp: Int64
     
     private lazy var tools: [Tool] = (Agent.requiredTools + optionalTools)
     private var history: [Message] = []
     private var summary: String = ""
     var suspendData: SuspendData? = nil
-    var parentAgentUUID: String? = nil
     
     var provider: LLMProvider
     let runner: AgentRunner
@@ -75,7 +77,8 @@ class Agent: Codable, @unchecked Sendable {
             RunPythonScript(workspace: { self.directories }),
             RunPythonCode(workspace: { self.directories }),
             RunCommand(workspace: { self.directories }, mode: { self.mode }),
-            ListAgents(), TalkToAgent(), DelegateTask()
+            ListAgents(), TalkToAgent(), DelegateTask(), ReleaseWorker(),
+            CreateChat(), UpdateAgent()
         ]
     }
     private static var requiredTools: [Tool] {
@@ -109,10 +112,16 @@ class Agent: Codable, @unchecked Sendable {
             }
         }
     }
+    
+    var isPrimaryAgent: Bool {
+        (uuid == DAWSON.primaryAgentUUID)
+    }
 
     init(
         uuid: String,
         userUUID: String,
+        parentAgentUUID: String? = nil,
+        name: String = "",
         providerType: ProviderClient.ProviderType = .ollama,
         type: AgentType,
         mode: ModeType,
@@ -122,10 +131,13 @@ class Agent: Codable, @unchecked Sendable {
         contextWindow: Int32,
         useThinking: Bool = true,
         directories: [String] = [DAWSON.root.path],
+        createdTimestamp: Int64 = Date.now.epochMillis,
         updatedTimestamp: Int64 = Date.now.epochMillis
     ) {
         self.uuid = uuid
         self.userUUID = userUUID
+        self.parentAgentUUID = parentAgentUUID
+        self.name = (name.isEmpty) ? AgentName.getNewName(for: uuid, type: type, avoiding: AgentHandler.shared.getAgentNames(userUUID: userUUID)) : name
         self.type = type
         self.mode = mode
         self.model = model
@@ -134,6 +146,7 @@ class Agent: Codable, @unchecked Sendable {
         self.contextWindow = contextWindow
         self.useThinking = useThinking
         self.directories = directories
+        self.createdTimestamp = createdTimestamp
         self.updatedTimestamp = updatedTimestamp
         
         provider = Provider.provider(for: model.provider)
@@ -145,6 +158,7 @@ class Agent: Codable, @unchecked Sendable {
         case uuid
         case userUUID
         case parentAgentUUID
+        case name
         case type
         case mode
         case model
@@ -153,6 +167,7 @@ class Agent: Codable, @unchecked Sendable {
         case contextWindow
         case useThinking
         case directories
+        case createdTimestamp
         case updatedTimestamp
         // TODO: Need to add tools later
     }
@@ -162,8 +177,9 @@ class Agent: Codable, @unchecked Sendable {
 
         uuid = try container.decode(String.self, forKey: .uuid)
         userUUID = try container.decode(String.self, forKey: .userUUID)
-        parentAgentUUID = try container.decodeIfPresent(String.self, forKey: .parentAgentUUID)
+        parentAgentUUID = try container.decodeIfPresent(String.self, forKey: .parentAgentUUID) ?? nil
         type = try container.decode(AgentType.self, forKey: .type)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? AgentName.getNewName(for: uuid, type: type)
         mode = try container.decode(ModeType.self, forKey: .mode)
         model = try container.decode(LLMModel.self, forKey: .model)
         state = try container.decode(AgentState.self, forKey: .state)
@@ -171,6 +187,7 @@ class Agent: Codable, @unchecked Sendable {
         contextWindow = try container.decode(Int32.self, forKey: .contextWindow)
         useThinking = try container.decode(Bool.self, forKey: .useThinking)
         directories = try container.decode([String].self, forKey: .directories)
+        createdTimestamp = try container.decodeIfPresent(Int64.self, forKey: .createdTimestamp) ?? Date.distantPast.epochMillis
         updatedTimestamp = try container.decode(Int64.self, forKey: .updatedTimestamp)
         
         provider = Provider.provider(for: model.provider)
@@ -182,7 +199,8 @@ class Agent: Codable, @unchecked Sendable {
 
         try container.encode(uuid, forKey: .uuid)
         try container.encode(userUUID, forKey: .userUUID)
-        try container.encodeIfPresent(parentAgentUUID, forKey: .parentAgentUUID)
+        try container.encode(parentAgentUUID, forKey: .parentAgentUUID)
+        try container.encode(name, forKey: .name)
         try container.encode(type, forKey: .type)
         try container.encode(mode, forKey: .mode)
         try container.encode(model, forKey: .model)
@@ -191,6 +209,7 @@ class Agent: Codable, @unchecked Sendable {
         try container.encode(contextWindow, forKey: .contextWindow)
         try container.encode(useThinking, forKey: .useThinking)
         try container.encode(directories, forKey: .directories)
+        try container.encode(createdTimestamp, forKey: .createdTimestamp)
         try container.encode(updatedTimestamp, forKey: .updatedTimestamp)
         // TODO: Need to add tools later
     }

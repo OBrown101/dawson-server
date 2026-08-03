@@ -54,7 +54,7 @@ class TalkToAgent: ChatAware, DelegationBubbleAware {
         requires the user's approval (raised automatically). The Squirebot \
         retains its full history; use this for revisions, follow-up questions, \
         answering a worker's earlier question, or relaying instructions the \
-        user gave you for a specific chat. Use list_agents to see chats, \
+        user gave you for a specific chat. Use \(ListAgents.name) to see chats, \
         ownership, and modes.
         """
 
@@ -137,6 +137,9 @@ class TalkToAgent: ChatAware, DelegationBubbleAware {
                     prompt: heldMessage
                 )
                 return handle(step, taskTitle: targetChat.title)
+                
+            default:
+                return "Error: Unexpected pending state for \(TalkToAgent.name)."
             }
         }
 

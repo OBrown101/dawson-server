@@ -80,6 +80,11 @@ class ProviderHandler: @unchecked Sendable {
         return activeProviders[type]
     }
     
+    func getModelFromName(_ name: String) -> LLMModel? {
+        let models = activeProviders.values.flatMap({ $0.availableModels })
+        return models.first(where: { $0.name == name })
+    }
+    
     func getAPIKey(_ type: ProviderClient.ProviderType) -> String? {
         return activeProviders[type]?.apiKey
     }
@@ -93,6 +98,5 @@ class ProviderHandler: @unchecked Sendable {
         
         activeProviders[type]?.availableModels = models ?? []
         activeProviders[type]?.updatedTimestamp = Date.now.epochMillis
-        activeProviders[type]?.saveMetadata()
     }
 }

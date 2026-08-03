@@ -54,6 +54,7 @@ final class DelegationRunner {
             originActor: parentAgent.type.name,
             onEvent: { _, _ in }
         )
+        DAWSON.shared.broadcastChatMessages(chat)   // TODO: Need switch out for live stream (if possible)
         return await drive(
             chat: chat,
             childAgentUUID: childAgentUUID,
@@ -72,13 +73,15 @@ final class DelegationRunner {
         // Relays user decision to suspended child (child executes approved action in own mode)
         
         guard let chat = DAWSON.shared.getChat(pending.childChatUUID) else {
-            return .completed(DelegationOutcome(
-                report: "Error: the worker's chat (\(pending.childChatUUID)) no longer exists; the pending request could not be resolved.",
-                workerQuestions: pending.autoResolvedInputs,
-                chatUUID: pending.childChatUUID,
-                agentUUID: pending.childAgentUUID,
-                producedReply: false
-            ))
+            return .completed(
+                DelegationOutcome(
+                    report: "Error: the worker's chat (\(pending.childChatUUID)) no longer exists; the pending request could not be resolved.",
+                    workerQuestions: pending.autoResolvedInputs,
+                    chatUUID: pending.childChatUUID,
+                    agentUUID: pending.childAgentUUID,
+                    producedReply: false
+                )
+            )
         }
 
         let mapped = UserInputResponse(
@@ -88,6 +91,7 @@ final class DelegationRunner {
             responseText: response.responseText
         )
         await chat.getResumedResponse(response: mapped, onEvent: { _, _ in })
+        DAWSON.shared.broadcastChatMessages(chat)   // TODO: Need switch out for live stream (if possible)
 
         return await drive(
             chat: chat,
@@ -137,6 +141,7 @@ final class DelegationRunner {
                     """
                 )
                 await chat.getResumedResponse(response: auto, onEvent: { _, _ in })
+                DAWSON.shared.broadcastChatMessages(chat)   // TODO: Need switch out for live stream (if possible)
 
             case .permission, .confirmation:
                 let bubbled = UserInputRequest(
@@ -173,7 +178,8 @@ final class DelegationRunner {
         // Busy / no-reply detection: a fresh run that added NO messages means
         // the target agent was already running or the run failed. Never
         // scavenge a stale assistant message as if it were the reply.
-        if let baseline = baselineMessageCount, (chat.messages.count <= baseline) {
+        if let baseline = baselineMessageCount,
+           (chat.messages.count <= baseline) {
             return .completed(DelegationOutcome(
                 report: "No reply was produced — the agent was busy with another run or the run failed. Try again shortly.",
                 workerQuestions: workerQuestions,
@@ -184,17 +190,19 @@ final class DelegationRunner {
         }
 
         let finalText = chat.messages
-            .last(where: { $0.sourceType == .response && $0.dataType == .text })
+            .last(where: { ($0.sourceType == .response) && ($0.dataType == .text) })
             .flatMap { $0.payload.value as? String }
             ?? "(the agent produced no final response)"
 
-        return .completed(DelegationOutcome(
-            report: finalText,
-            workerQuestions: workerQuestions,
-            chatUUID: chat.uuid,
-            agentUUID: childAgentUUID,
-            producedReply: true
-        ))
+        return .completed(
+            DelegationOutcome(
+                report: finalText,
+                workerQuestions: workerQuestions,
+                chatUUID: chat.uuid,
+                agentUUID: childAgentUUID,
+                producedReply: true
+            )
+        )
     }
 }
 
@@ -202,8 +210,8 @@ extension DelegationRunner {
     static func formatOutcome(_ outcome: DelegationOutcome, taskTitle: String) -> String {
         var result = """
         == Report: \(taskTitle) ==
-        (Chat UUID: \(outcome.chatUUID) — full transcript visible in Beakshield; \
-        use talk_to_agent with this chat UUID to follow up.)
+        (Chat UUID: \(outcome.chatUUID) — full transcript visible to client (e.g. Beakshield); \
+        use \(TalkToAgent.name) with this chat UUID to follow up.)
 
         \(outcome.report)
         """
@@ -215,7 +223,7 @@ extension DelegationRunner {
 
             [The worker asked \(outcome.workerQuestions.count) question(s) that were \
             auto-answered with 'proceed with your judgment'. If any need a real answer, \
-            either answer from your own knowledge via talk_to_agent, or ask the user \
+            either answer from your own knowledge via \(TalkToAgent.name), or ask the user \
             first and relay the answer:
             \(questions)]
             """

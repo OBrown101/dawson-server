@@ -34,6 +34,10 @@ actor AgentRunRegistry {
             runUUIDByAgentUUID.removeValue(forKey: agentUUID)
         }
     }
+    
+    func isAgentRunning(agentUUID: String) -> Bool {
+        return (runUUIDByAgentUUID[agentUUID] != nil)
+    }
 
     func cancel(runUUID: String) {
         tasksByRunUUID[runUUID]?.cancel()

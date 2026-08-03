@@ -13,7 +13,7 @@ struct UserInputRequest: Codable {
     let type: ReqType
     let prompt: String          // Can be reason for request or LLM's prompt to the user
     let toolCallName: String?
-    let metadata: [String: String]
+    var metadata: [String: String] = [:]
     
     enum ReqType: String, Codable {
         case permission = "PERMISSION"

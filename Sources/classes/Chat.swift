@@ -13,6 +13,7 @@ class Chat: Codable {
     let agentUUID: String
     var title: String       // Set by user as overall chat topic
     var subtitle: String    // Set by agent as current discussion topic
+    let createdTimestamp: Int64
     var updatedTimestamp: Int64
     
     static let chatsDirectory = DAWSON.databank.appendingPathComponent("chats")
@@ -21,12 +22,17 @@ class Chat: Codable {
     
     var messages: [MessageData] = []
     
-    init(uuid: String, userUUID: String, agentUUID: String, title: String = "", subtitle: String = "") {
+    var isPrimaryChat: Bool {
+        (uuid == DAWSON.primaryChatUUID)
+    }
+    
+    init(uuid: String, userUUID: String, agentUUID: String, title: String = "", subtitle: String = "", createdTimestamp: Int64 = Date.now.epochMillis) {
         self.uuid = uuid
         self.userUUID = userUUID
         self.agentUUID = agentUUID
         self.title = title
         self.subtitle = subtitle
+        self.createdTimestamp = createdTimestamp
         self.updatedTimestamp = Date.now.epochMillis
     }
     
@@ -36,6 +42,7 @@ class Chat: Codable {
         case agentUUID
         case title
         case subtitle
+        case createdTimestamp
         case updatedTimestamp
     }
     
@@ -47,6 +54,7 @@ class Chat: Codable {
         agentUUID = try container.decode(String.self, forKey: .agentUUID)
         title = try container.decode(String.self, forKey: .title)
         subtitle = try container.decode(String.self, forKey: .subtitle)
+        createdTimestamp = try container.decodeIfPresent(Int64.self, forKey: .createdTimestamp) ?? Date.distantPast.epochMillis
         updatedTimestamp = try container.decode(Int64.self, forKey: .updatedTimestamp)
     }
 
@@ -58,6 +66,7 @@ class Chat: Codable {
         try container.encode(agentUUID, forKey: .agentUUID)
         try container.encode(title, forKey: .title)
         try container.encode(subtitle, forKey: .subtitle)
+        try container.encode(createdTimestamp, forKey: .createdTimestamp)
         try container.encode(updatedTimestamp, forKey: .updatedTimestamp)
     }
     
@@ -76,7 +85,7 @@ class Chat: Codable {
     
     private func updateTitles() {
         let summary = AgentHandler.shared.getAgent(agentUUID)?.getSummary() ?? ""
-        title = (title.isEmpty) ? summary : title
+        title = (title.isEmpty && !isPrimaryChat) ? summary : title
         subtitle = summary
         updatedTimestamp = Date.now.epochMillis
         saveMetadata()

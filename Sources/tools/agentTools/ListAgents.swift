@@ -76,7 +76,13 @@ class ListAgents: ChatAware {
                 let subtitle = (chat.subtitle.isEmpty) ? chat.title : chat.subtitle
                 return (subtitle.isEmpty) ? "(no topic yet)" : subtitle
             } ?? "(no chat)"
-
+            
+            let createdTimestamp = if let created = agentChat?.createdTimestamp {
+                String(created)
+            } else {
+                "-"
+            }
+            
             let ownership: String
             if (agent.uuid == parent.uuid) {
                 ownership = "you"
@@ -96,13 +102,20 @@ class ListAgents: ChatAware {
                                 && (effective.rank > parent.effectiveMode.rank))
                 ? " — messaging requires user approval (outranks you)"
                 : ""
-
+            
+            let lastMsgTimestamp = if let timestamp = agentChat?.messages.compactMap({ $0.timestamp }).max() {
+                String(timestamp)
+            } else {
+                ""
+            }
+            
             return """
-            • \(agent.type.name) [\(ownership)] [\(agent.state)]\(approvalNote)
-              Chat UUID: \(agentChat?.uuid ?? "-")
+            • \(agent.type.name) [\(ownership)] [\(agent.state)] [\(agent.uuid)] [birth: \(agent.createdTimestamp)(epoch-millis)]\(approvalNote)
+              Chat UUID: \(agentChat?.uuid ?? "-") [created: \(createdTimestamp)(epoch-millis)]
               Topic: \(topic)
               Mode: \(modeText) | Model: \(agent.model.name)
               Workspace: \(agent.effectiveDirectories.isEmpty ? "(none)" : agent.effectiveDirectories.joined(separator: ", "))
+              Last message timestamp: \(lastMsgTimestamp)(epoch-millis)
             """
         }
 

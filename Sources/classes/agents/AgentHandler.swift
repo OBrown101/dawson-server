@@ -67,6 +67,10 @@ class AgentHandler: @unchecked Sendable {
         }
     }
     
+    func getAgentNames(userUUID: String) -> [String] {
+        return activeAgents.values.filter({ $0.userUUID == userUUID }).map { $0.name }
+    }
+    
     func getAgents(userUUID: String) -> [Agent] {
         return activeAgents.values.filter({ $0.userUUID == userUUID }).map { $0 }
     }
