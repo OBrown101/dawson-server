@@ -169,7 +169,6 @@ class Agent: Codable, @unchecked Sendable {
         case directories
         case createdTimestamp
         case updatedTimestamp
-        // TODO: Need to add tools later
     }
     
     required init(from decoder: Decoder) throws {
@@ -211,7 +210,6 @@ class Agent: Codable, @unchecked Sendable {
         try container.encode(directories, forKey: .directories)
         try container.encode(createdTimestamp, forKey: .createdTimestamp)
         try container.encode(updatedTimestamp, forKey: .updatedTimestamp)
-        // TODO: Need to add tools later
     }
     
     func getHistory() -> [Message] {

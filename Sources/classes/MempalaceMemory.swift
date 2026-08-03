@@ -33,6 +33,8 @@ class MempalaceMemory: @unchecked Sendable {
             let result = try PythonHandler.shared.call(moduleName: "mempalace.mcp_server", functionName: "handle_request", args: mcpPayload)
             return String(describing: result)
         } catch {
+            print("MEMPALACE FULL ERROR ↓↓↓")
+            print(error)   // full PythonKit error incl. traceback, unclipped
             return "Mempalace \(name) failed: \(error)"
         }
     }
@@ -58,42 +60,4 @@ class MempalaceMemory: @unchecked Sendable {
     func getStatus() -> String {
         return mempalaceExec(name: "mempalace_status", args: [:])
     }
-    
-    func addConvHistory(messages: [Message], agent: Agent.AgentType) {
-        guard let jsonData = try? JSONEncoder().encode(messages),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
-            print("Failed to add conversation history.")
-            return
-        }
-        
-        let args: [String: Any] = [
-            "wing": agent.name,
-            "room": "conversations",
-            "content": jsonString,
-            "added_by": agent.name
-        ]
-        
-        let result = mempalaceExec(name: "mempalace_add_drawer", args: args)
-        print("addConvHistory: " + String(describing: result))
-    }
-    
-    func getPromptContext(query: String, wing: String? = nil, room: String? = nil, nResults: Int = 8) -> String {
-        var args: [String: Any] = [
-            "query": query,
-            "n_results": nResults
-        ]
-        
-        if let wing = wing {
-            args["wing"] = wing
-        }
-        
-        if let room = room {
-            args["room"] = room
-        }
-        
-        let context = mempalaceExec(name: "mempalace_search", args: args)
-        
-        return ("Memory retrieved based on user's prompt: ##\(context)##")
-    }
-     
 }

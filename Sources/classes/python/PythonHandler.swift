@@ -26,6 +26,9 @@ class PythonHandler: @unchecked Sendable {
         sysModule.path.insert(0, PythonEnv.pythonHome.path)
         sysModule.path.insert(0, PythonHandler.scriptsPath.path)
         
+        let os = try Python.attemptImport("os")
+        os.environ.pop("PYTHONPATH", Python.None)
+        
         sys = sysModule
     }
     
@@ -38,7 +41,7 @@ class PythonHandler: @unchecked Sendable {
             do {
                 module = try Python.attemptImport(moduleName)
             } catch {
-                throw PythonError.moduleNotFound(moduleName)
+                throw PythonError.moduleNotFound("\(moduleName), error: \(error)")
             }
             
             let args = try PythonUtilities.toPython(args)

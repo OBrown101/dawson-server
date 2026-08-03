@@ -8,8 +8,10 @@
 import Foundation
 import Vapor
 import NIOSSL
+import PythonKit
 
 PythonEnv.setEnv()  // This must be setup before PythonKit is imported
+PythonLibrary.useLibrary(at: PythonEnv.pythonLibPath)
 
 try WebSocketSecurity.setup()
 
