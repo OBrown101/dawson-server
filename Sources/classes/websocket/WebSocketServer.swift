@@ -484,6 +484,96 @@ extension WebSocketServer {
 
         self.sendTask(WSPacket(type: .syncState, payload: AnyCodable(response)), ws: ws)
     }
+    
+    private func handleMemoryData(_ memoryData: MemoryData, ws: WebSocket) async {
+        let palace = MempalaceMemory.shared
+        guard let query: MemoryQuery = guardPayload(memoryData.payload, dataType: memoryData.dataType.rawValue, ws: ws) else { return }
+
+        do {
+            let result: Any
+            switch memoryData.dataType {
+
+            case .overview:
+                result = try await palace.overview(since: query.since, limit: query.limit)
+
+            case .listWings:
+                result = try await palace.listWings()
+
+            case .listRooms:
+                guard let wing = query.wing else {
+                    await send(WSPacket(type: .error, payload: "ListRooms requires wing"), ws: ws)
+                    return
+                }
+                result = try await palace.listRooms(wing: wing)
+
+            case .pageEntries:
+                result = try await palace.pageEntries(
+                    wing: query.wing,
+                    room: query.room,
+                    before: query.before,
+                    limit: query.limit
+                )
+
+            case .entry:
+                guard let drawerID = query.drawerID else {
+                    await send(WSPacket(type: .error, payload: "Entry requires drawerID"), ws: ws)
+                    return
+                }
+                result = try await palace.getEntry(drawerID: drawerID)
+
+            case .search:
+                guard let q = query.query,
+                      (!q.isEmpty) else {
+                    await send(WSPacket(type: .error, payload: "Search requires query"), ws: ws)
+                    return
+                }
+                result = try await palace.searchStructured(
+                    query: q,
+                    wing: query.wing,
+                    room: query.room,
+                    nResults: query.nResults ?? 8
+                )
+
+            case .delete:
+                guard let dawson = dawson else { return }
+                
+                guard let drawerID = query.drawerID else {
+                    await send(WSPacket(type: .error, payload: "Delete requires drawerID"), ws: ws)
+                    return
+                }
+                result = try await palace.deleteEntry(drawerID: drawerID)
+                respondToMemoryData(to: memoryData, result: result, ws: ws)
+                dawson.broadcastMemoryDelete(memoryData, drawerID: drawerID)
+                return
+            }
+
+            respondToMemoryData(to: memoryData, result: result, ws: ws)
+
+        } catch {
+            await send(WSPacket(type: .error, payload: "\(error)"), ws: ws)
+        }
+    }
+}
+
+extension WebSocketServer {
+    
+    private func guardPayload<T: Decodable>(_ payload: AnyCodable, dataType: String, ws: WebSocket) -> T? {
+        guard let data = try? JSONEncoder().encode(payload),
+              let object = try? JSONDecoder().decode(T.self, from: data) else {
+            sendTask(WSPacket(type: .error, payload: "Invalid \(dataType) payload"), ws: ws)
+            return nil
+        }
+        return object
+    }
+    
+    private func jsonSafe(_ value: Any) -> Any {
+        if JSONSerialization.isValidJSONObject(value),
+           let data = try? JSONSerialization.data(withJSONObject: value),
+           let round = try? JSONSerialization.jsonObject(with: data) {
+            return round
+        }
+        return value
+    }
 }
 
 extension WebSocketServer {
@@ -503,17 +593,18 @@ extension WebSocketServer {
             dataType: .dataLastIndex,
             payload: AnyCodable(lastDataIndex)
         )
-
+        
         let response = WSPacket(type: .agentData, payload: AnyCodable(agentData))
         self.sendTask(response, ws: ws)
     }
     
-    private func guardPayload<T: Decodable>(_ payload: AnyCodable, dataType: String, ws: WebSocket) -> T? {
-        guard let data = try? JSONEncoder().encode(payload),
-              let object = try? JSONDecoder().decode(T.self, from: data) else {
-            sendTask(WSPacket(type: .error, payload: "Invalid \(dataType) payload"), ws: ws)
-            return nil
-        }
-        return object
+    private func respondToMemoryData(to request: MemoryData, result: Any, ws: WebSocket) {
+        let response = MemoryData(
+            userUUID: request.userUUID,
+            dataUUID: request.dataUUID,
+            dataType: request.dataType,
+            payload: AnyCodable(jsonSafe(result))
+        )
+        sendTask(WSPacket(type: .memoryData, payload: AnyCodable(response)), ws: ws)
     }
 }

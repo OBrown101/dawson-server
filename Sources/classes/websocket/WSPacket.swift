@@ -37,6 +37,7 @@ struct WSPacket: Codable, @unchecked Sendable {
         case agentData = "AGENT_DATA"
         case chatData = "CHAT_DATA"
         case configData = "CONFIG_DATA"
+        case memoryData = "MEMORY_DATA"
         case userInputRequest = "USER_INPUT_REQUEST"
         case userInputRequestResponse = "USER_INPUT_REQUEST_RESPONSE"
         case error = "ERROR"

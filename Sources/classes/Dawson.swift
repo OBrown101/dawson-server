@@ -248,4 +248,17 @@ extension DAWSON {
         let response = WSPacket(type: .configData, payload: AnyCodable(configData))
         server.broadcast(response)
     }
+    
+    func broadcastMemoryDelete(_ request: MemoryData, drawerID: String) {
+        guard let encoded = try? JSONEncoder().encode(request),
+              let payload = try? JSONDecoder().decode(AnyCodable.self, from: encoded) else { return }
+        let memoryData = MemoryData(
+            userUUID: request.userUUID,
+            dataUUID: request.dataUUID,
+            dataType: .delete,
+            payload: AnyCodable(["deleted": drawerID])
+        )
+        let response = WSPacket(type: .configData, payload: AnyCodable(memoryData))
+        server.broadcast(response)
+    }
 }

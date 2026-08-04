@@ -119,6 +119,10 @@ class DelegateTask: ChatAware, DelegationBubbleAware {
               let parent = AgentHandler.shared.getAgent(parentChat.agentUUID) else {
             return "Error: Delegation is unavailable — no originating chat context."
         }
+        
+        guard (parentChat.isPrimaryChat) else {
+            return "Error: Delegation is unavailable — only Dawson is allowed to delegate task."
+        }
 
         // --- Resume leg: a bubbled request was decided by the user ---
         if let pending = self.pending {
