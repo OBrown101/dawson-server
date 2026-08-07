@@ -10,19 +10,19 @@ import Foundation
 class Loader: @unchecked Sendable {
     static let shared = Loader()
     
-    func buildBaseSystemPrompt(agent: Agent.AgentType) -> String {
+    func buildBaseSystemPrompt(agent: Agent.AgentType) async -> String {
         let primarySoul = loadAgentPrimarySoul(agent)
         let dynamicSoul = loadAgentDynamicSoul(agent)
-        let memorySchema = loadMemory()
+        let memorySchema = await loadMemory()
         let skillSummaries = loadSkillSummaries()
         let pythonTools = loadPythonToolSummaries()
         return [primarySoul, dynamicSoul, skillSummaries, pythonTools, memorySchema].joined(separator: "\n")
     }
     
-    func loadMemory() -> String {
+    func loadMemory() async -> String {
         return """
         ## YOUR MEMORY SETUP ##
-        \(MempalaceMemory.shared.getStatus())
+        \(await MempalaceMemory.shared.getStatus())
         ## --- ##
         """
     }

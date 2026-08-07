@@ -9,81 +9,59 @@ import Foundation
 
 class MempalaceDiaryRead: Tool {
     static let name = "mempalace_diary_read"
+
+    private let toolDescription = """
+    Read your recent diary entries (in AAAK). See what past versions of yourself recorded — your journal across sessions.
+    """
+    
+    private let parameterSchema: [String: Any] = [
+        "type": "object",
+        "required": ["agent_name"],
+        "properties": [
+            "agent_name": [
+                "type": "string",
+                "description": "Your name — each agent gets their own diary wing"
+            ],
+            "last_n": [
+                "type": "integer",
+                "description": "Number of recent entries to read (default: 10)"
+            ],
+            "wing": [
+                "type": "string",
+                "description": "Wing to read diary entries from (optional). If omitted, reads from wing_{agent_name}."
+            ]
+        ]
+    ]
     
     func openAISchema() -> [String : Any] {
         return [
             "type": "function",
             "name": MempalaceDiaryRead.name,
-            "description": """
-            Read your recent diary entries (in AAAK). See what past versions of yourself recorded — your journal across sessions.
-            """,
-            "parameters": [
-                "type": "object",
-                "properties": [
-                    "agent_name": [
-                        "type": "string",
-                        "description": "The agent's internal name — each agent gets their own diary wing"
-                    ],
-                    "last_n": [
-                        "type": "integer",
-                        "description": "Number of recent entries to read (use 10 as default if unsure)",
-                        "default": 10
-                    ]
-                ],
-                "required": ["agent_name"]
-            ]
+            "description": toolDescription,
+            "parameters": parameterSchema
         ]
     }
-    
+
     func anthropicSchema() -> [String : Any] {
         return [
             "name": MempalaceDiaryRead.name,
-            "description": """
-            Read your recent diary entries (in AAAK). See what past versions of yourself recorded — your journal across sessions.
-            """,
-            "input_schema": [
-                "type": "object",
-                "properties": [
-                    "agent_name": [
-                        "type": "string",
-                        "description": "The agent's internal name — each agent gets their own diary wing"
-                    ],
-                    "last_n": [
-                        "type": "integer",
-                        "description": "Number of recent entries to read (use 10 as default if unsure)",
-                        "default": 10
-                    ]
-                ],
-                "required": ["agent_name"]
-            ]
+            "description": toolDescription,
+            "input_schema": parameterSchema
         ]
     }
-    
-    func ollamaSchema() -> [String: Any] {
+
+    func ollamaSchema() -> [String : Any] {
         return [
             "type": "function",
             "function": [
                 "name": MempalaceDiaryRead.name,
-                "description": "Read your recent diary entries (in AAAK). See what past versions of yourself recorded — your journal across sessions.",
-                "parameters": [
-                    "type": "object",
-                    "required": ["agent_name"],
-                    "properties": [
-                        "agent_name": [
-                            "type": "string",
-                            "description": "The agent's internal name — each agent gets their own diary wing"
-                        ],
-                        "last_n": [
-                            "type": "integer",
-                            "description": "Number of recent entries to read (use 10 as default if unsure)"
-                        ]
-                    ]
-                ]
+                "description": toolDescription,
+                "parameters": parameterSchema
             ]
         ]
     }
-    
-    func execute(args: [String: Any]) -> String {
-        return MempalaceMemory.shared.mempalaceExec(name: MempalaceDiaryRead.name, args: args)
+
+    func execute(args: [String: Any]) async -> String {
+        return await MempalaceMemory.shared.mempalaceExec(name: MempalaceDiaryRead.name, args: args)
     }
 }

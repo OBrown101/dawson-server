@@ -528,7 +528,9 @@ extension WebSocketServer {
                     wing: query.wing,
                     room: query.room,
                     limit: query.limit,
-                    offset: query.offset
+                    offset: query.offset,
+                    since: query.since,
+                    before: query.before
                 )
                 
             case .entry:
@@ -548,7 +550,10 @@ extension WebSocketServer {
                     query: q,
                     wing: query.wing,
                     room: query.room,
-                    limit: query.limit
+                    limit: query.limit,
+                    context: query.context,
+                    maxDistance: query.maxDistance,
+                    sourceFile: query.sourceFile
                 )
 
             case .delete:

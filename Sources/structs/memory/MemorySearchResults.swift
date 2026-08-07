@@ -20,5 +20,8 @@ struct MemorySearchResults: Codable {
         results = try c.decodeIfPresent([MemoryDrawer].self, forKey: .results) ?? []
     }
 
-    enum CodingKeys: String, CodingKey { case query, results }
+    enum CodingKeys: String, CodingKey {
+        case query
+        case results
+    }
 }

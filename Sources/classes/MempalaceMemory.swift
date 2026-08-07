@@ -7,7 +7,6 @@
 
 import Foundation
 import AnyCodable
-import PythonKit
 import System
 
 class MempalaceMemory: @unchecked Sendable {
@@ -16,99 +15,101 @@ class MempalaceMemory: @unchecked Sendable {
     static let mempalacePath = DAWSON.root.appendingPathComponent(".mempalace")
     static let palacePath = mempalacePath.appendingPathComponent("palace")
     
-    func mempalaceExec(name: String, args: [String: Any]) -> String {
-        setenv("MEMPALACE_PALACE_PATH", MempalaceMemory.palacePath.path, 1)
-        
-        let mcpPayload: [String: Any] = [
-            "method": "tools/call",
-            "id": UUID().uuidString,
-            "params": [
-                "name": name,
-                "arguments": args
-            ]
+    private let server = MCPServerProcess(
+        name: "mempalace",
+        executable: PythonEnv.pythonExecPath,
+        arguments: ["-m", "mempalace.mcp_server"],
+        environment: [
+            "PYTHONHOME": PythonEnv.pythonHome.path,
+            "PYTHONUNBUFFERED": "1",
+            "HOME": FileManager.default.homeDirectoryForCurrentUser.path,
+            "PATH": PythonEnv.pythonHome.appendingPathComponent("bin").path + ":/usr/bin:/bin",
+            "LANG": "C.UTF-8",
+            "MEMPALACE_PALACE_PATH": MempalaceMemory.palacePath.path
         ]
-        
+    )
+    
+    func mempalaceExec(name: String, args: [String: Any]) async -> String {
+        // For agent tool calls
         do {
-            return try PythonHandler.shared.callString(moduleName: "mempalace.mcp_server", functionName: "handle_request", args: mcpPayload)
+            let raw = try await server.callTool(
+                name: name,
+                argumentsData: try JSONSerialization.data(withJSONObject: args)
+            )
+            return MempalaceMemory.stringify(unwrapMCPEnvelope(parse(raw)))
         } catch {
             print("MEMPALACE FULL ERROR ↓↓↓")
-            print(error)   // full PythonKit error incl. traceback, unclipped
+            print(error)
             return "Mempalace \(name) failed: \(error)"
         }
     }
     
-    func mineConversations(path: String) throws -> PythonProcess {
-        let args = [
-            "-m", "mempalace",
-            "--palace", MempalaceMemory.palacePath.path,
-            "mine",
-            path,
-            "--mode", "convos"
-        ]
-
-        return try PythonHandler.shared.startPythonProcess(
-            scriptPath: PythonEnv.pythonExecPath,
-            arguments: args,
-            inputPipe: Pipe(),
-            outputPipe: Pipe(),
-            errorPipe: Pipe()
-        )
-    }
-    
-    func getStatus() -> String {
-        return mempalaceExec(name: "mempalace_status", args: [:])
-    }
-}
-
-extension MempalaceMemory {
-    
-    private struct SendableJSON: @unchecked Sendable {
-        let value: Any
-    }
-
     func execStructured(name: String, args: [String: Any]) async throws -> Any {
-        setenv("MEMPALACE_PALACE_PATH", MempalaceMemory.palacePath.path, 1)
-
-        let mcpPayload: [String: Any] = [
-            "method": "tools/call",
-            "id": UUID().uuidString,
-            "params": [
-                "name": name,
-                "arguments": args
-            ]
-        ]
-
-        let bridgeArgs: [String: Any] = [
-            "module": "mempalace.mcp_server",
-            "function": "handle_request",
-            "args": mcpPayload
-        ]
-
-        let jsonString: String = try await withCheckedThrowingContinuation { cont in
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    let s = try PythonHandler.shared.callString(
-                        moduleName: "dawson_bridge",
-                        functionName: "call_json",
-                        args: bridgeArgs
-                    )
-                    cont.resume(returning: s)
-                } catch {
-                    cont.resume(throwing: MemoryError.pythonFailed("\(error)"))
-                }
-            }
+        // For use for Websocket client (e.g. Beakshield)
+        do {
+            let raw = try await server.callTool(
+                name: name,
+                argumentsData: try JSONSerialization.data(withJSONObject: args)
+            )
+            return unwrapMCPEnvelope(parse(raw))
+        } catch let error as MCPProcessError {
+            throw MemoryError.pythonFailed("\(error)")
         }
-
-        guard let data = jsonString.data(using: .utf8),
-              let raw = try? JSONSerialization.jsonObject(with: data) else {
-            throw MemoryError.badResponse("bridge returned non-JSON: \(jsonString.prefix(300))")
-        }
-
-        print("MEMPALACE RAW [\(name)]:", raw)   // keep until first good decode
-        return MempalaceMemory.unwrapMCPEnvelope(raw)
+    }
+    
+    func listServerTools() async throws -> Any {
+        parse(try await server.listTools())
+    }
+    
+    func shutdown() async {
+        await server.shutdown()
     }
 
-    static func unwrapMCPEnvelope(_ raw: Any) -> Any {
+    func mineConversations(
+        path: String,
+        wing: String? = nil,
+        agent: String? = nil,
+        dryRun: Bool = false,
+        limit: Int = 0
+    ) async throws -> MemoryMineResult {
+        var args: [String: Any] = [
+            "source": path,
+            "mode": "convos",
+            "dry_run": dryRun,
+            "limit": limit
+        ]
+        if let wing { args["wing"] = wing }
+        if let agent { args["agent"] = agent }
+
+        do {
+            let raw = try await server.callTool(
+                name: "mempalace_mine",
+                argumentsData: try JSONSerialization.data(withJSONObject: args),
+                timeout: 1_800   // mining runs long; 30 min ceiling
+            )
+            return try MempalaceMemory.decode(MemoryMineResult.self, from: unwrapMCPEnvelope(parse(raw)))
+        } catch let error as MCPProcessError {
+            throw MemoryError.pythonFailed("\(error)")
+        }
+    }
+    
+    func getStatus() async -> String {
+        return await mempalaceExec(name: "mempalace_status", args: [:])
+    }
+    
+    private func parse(_ raw: String) -> Any {
+        // Raw JSON-RPC line → Any (dict/array), or a wrapped error.
+        guard let data = raw.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: data) else {
+            return ["error": "non-JSON MCP response: \(raw.prefix(300))"]
+        }
+        return parsed
+    }
+    
+    private func unwrapMCPEnvelope(_ raw: Any) -> Any {
+        // JSON-RPC envelope → the tool's own JSON.
+        // { jsonrpc, id, result: { content: [ { type: "text", text: "{...}" } ] } }
+        
         var current = raw
 
         if let dict = current as? [String: Any] {
@@ -120,15 +121,21 @@ extension MempalaceMemory {
             }
         }
 
-        if let dict = current as? [String: Any],
-           let content = dict["content"] as? [[String: Any]],
-           let text = content.first?["text"] as? String {
-            // Tool payload is usually JSON serialized into the text block.
-            if let data = text.data(using: .utf8),
-               let parsed = try? JSONSerialization.jsonObject(with: data) {
-                return parsed
+        if let dict = current as? [String: Any] {
+            // MCP tool-level failure flag
+            if (dict["isError"] as? Bool) == true,
+               let content = dict["content"] as? [[String: Any]],
+               let text = content.first?["text"] as? String {
+                return ["error": text]
             }
-            return ["text": text]   // non-JSON tool output, pass through
+            if let content = dict["content"] as? [[String: Any]],
+               let text = content.first?["text"] as? String {
+                if let data = text.data(using: .utf8),
+                   let parsed = try? JSONSerialization.jsonObject(with: data) {
+                    return parsed
+                }
+                return ["text": text]   // non-JSON tool output, pass through
+            }
         }
 
         return current
@@ -138,26 +145,28 @@ extension MempalaceMemory {
 extension MempalaceMemory {
 
     func overview(limit: Int?) async throws -> MemoryOverview {
-        // Docs don't specify list_drawers ordering
-        // (if oldest-first, flip to offset = max(total - limit, 0) using page.total, then reverse page.drawers)
-        
+        // Recents: bounded filed_at window, sorted newest-first
+        // Widens if the recent window is quiet.
+
         var overview = MemoryOverview(status: nil, recents: [])
 
-        do {
-            let raw = try await execStructured(name: "mempalace_status", args: [:])
-            overview.status = try MempalaceMemory.decode(MemoryStatus.self, from: raw)
-        } catch {
-            overview.statusError = "\(error)"
+        let want = min(limit ?? 25, 100)
+        for days in [14, 90, nil as Int?] {
+            do {
+                let since = days.map { Self.isoDate(daysAgo: $0) }
+                let page = try await pageEntries(wing: nil, room: nil, limit: 100, offset: 0, since: since)
+                if (!page.drawers.isEmpty) || (days == nil) {
+                    overview.recents = page.drawers
+                        .sorted { ($0.filedAt ?? "") > ($1.filedAt ?? "") }
+                        .prefix(want)
+                        .map { $0 }
+                    break
+                }
+            } catch {
+                overview.recentsError = "\(error)"
+                break
+            }
         }
-
-        do {
-            let page = try await pageEntries(wing: nil, room: nil,
-                                             limit: min(limit ?? 25, 100), offset: 0)
-            overview.recents = page.drawers
-        } catch {
-            overview.recentsError = "\(error)"
-        }
-
         return overview
     }
 
@@ -172,25 +181,43 @@ extension MempalaceMemory {
         let raw = try await execStructured(name: "mempalace_list_rooms", args: args)
         return try MempalaceMemory.decode(MemoryRoomList.self, from: raw)
     }
-
-    func pageEntries(wing: String?, room: String?, limit: Int?, offset: Int?) async throws -> MemoryDrawerPage {
-        // Offset pagination per docs (limit ≤ 100, default 20).
-        // Next page: offset = previous offset + drawers.count; done when offset + drawers.count >= total.
-        
+    
+    func pageEntries(
+        wing: String?,
+        room: String?,
+        limit: Int?,
+        offset: Int?,
+        since: String? = nil,
+        before: String? = nil
+    ) async throws -> MemoryDrawerPage {
+        // Offset pagination (limit ≤ 100). Next page: offset + drawers.count; done when that reaches total.
         var args: [String: Any] = [
             "limit": min(limit ?? 25, 100),
             "offset": max(offset ?? 0, 0)
         ]
         if let wing { args["wing"] = wing }
         if let room { args["room"] = room }
+        if let since { args["since"] = since }
+        if let before { args["before"] = before }
         let raw = try await execStructured(name: "mempalace_list_drawers", args: args)
         return try MempalaceMemory.decode(MemoryDrawerPage.self, from: raw)
     }
 
-    func searchStructured(query: String, wing: String?, room: String?, limit: Int?) async throws -> MemorySearchResults {
-        var args: [String: Any] = ["query": query, "limit": (limit ?? 8)]
+    func searchStructured(
+        query: String,
+        wing: String?,
+        room: String?,
+        limit: Int?,
+        context: String? = nil,
+        maxDistance: Double? = nil,
+        sourceFile: String? = nil
+    ) async throws -> MemorySearchResults {
+        var args: [String: Any] = ["query": String(query.prefix(250)), "limit": (limit ?? 8)]
         if let wing { args["wing"] = wing }
         if let room { args["room"] = room }
+        if let context { args["context"] = context }
+        if let maxDistance { args["max_distance"] = maxDistance }
+        if let sourceFile { args["source_file"] = sourceFile }
         let raw = try await execStructured(name: "mempalace_search", args: args)
         return try MempalaceMemory.decode(MemorySearchResults.self, from: raw)
     }
@@ -207,8 +234,18 @@ extension MempalaceMemory {
 }
 
 extension MempalaceMemory {
+
+    static func isoDate(daysAgo: Int) -> String {
+        let date = Date().addingTimeInterval(-Double(daysAgo) * 86_400)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        return formatter.string(from: date) // "YYYY-MM-DD", matches the schema's example
+    }
     
     static func decode<T: Decodable>(_ type: T.Type, from any: Any) throws -> T {
+        if let dict = any as? [String: Any], let err = dict["error"] {
+            throw MemoryError.badResponse("tool error: \(err)")
+        }
         guard JSONSerialization.isValidJSONObject(any) else {
             throw MemoryError.badResponse("not a JSON object: \(Swift.type(of: any))")
         }
@@ -218,5 +255,15 @@ extension MempalaceMemory {
         } catch {
             throw MemoryError.badResponse("decoding \(T.self): \(error)")
         }
+    }
+    
+    static func stringify(_ value: Any) -> String {
+        if let s = value as? String { return s }
+        if JSONSerialization.isValidJSONObject(value),
+           let data = try? JSONSerialization.data(withJSONObject: value),
+           let s = String(data: data, encoding: .utf8) {
+            return s
+        }
+        return String(describing: value)
     }
 }

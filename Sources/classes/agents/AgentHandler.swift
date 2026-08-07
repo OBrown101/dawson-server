@@ -112,7 +112,7 @@ class AgentHandler: @unchecked Sendable {
     func runAgent(runUUID: String, userUUID: String, agentUUID: String, prompt: String, originActor: String? = nil, onEvent: @escaping (@Sendable (_ event: AgentEvent, _ runUUID: String) async -> Void)) async -> [Message] {
         guard let agent = activeAgents[agentUUID] else { return [] }
         
-        let systemPrompt = (agent.getHistory().isEmpty) ? Loader.shared.buildBaseSystemPrompt(agent: agent.type) : ""
+        let systemPrompt = await (agent.getHistory().isEmpty) ? Loader.shared.buildBaseSystemPrompt(agent: agent.type) : ""
         
         let task = Task<[Message], Error> {
             try Task.checkCancellation()

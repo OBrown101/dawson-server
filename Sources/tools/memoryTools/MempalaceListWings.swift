@@ -50,7 +50,7 @@ class MempalaceListWings: Tool {
         ]
     }
     
-    func execute(args: [String: Any]) -> String {
-        return MempalaceMemory.shared.mempalaceExec(name: MempalaceListWings.name, args: args)
+    func execute(args: [String: Any]) async -> String {
+        return await MempalaceMemory.shared.mempalaceExec(name: MempalaceListWings.name, args: args)
     }
 }
