@@ -8,13 +8,42 @@
 import Foundation
 import PythonKit
 
+fileprivate final class PythonSerialThread: @unchecked Sendable {
+    // Dedicated Python thread
+    private let cond = NSCondition()
+    private var jobs: [() -> Void] = []
+
+    init() {
+        Thread.detachNewThread { [self] in
+            while true {
+                cond.lock()
+                while jobs.isEmpty { cond.wait() }
+                let job = jobs.removeFirst()
+                cond.unlock()
+                job()
+            }
+        }
+    }
+
+    func sync<T>(_ body: @escaping () throws -> T) throws -> T {
+        var result: Result<T, Error>!
+        let sem = DispatchSemaphore(value: 0)
+        cond.lock()
+        jobs.append { result = Result { try body() }; sem.signal() }
+        cond.signal()
+        cond.unlock()
+        sem.wait()
+        return try result.get()
+    }
+}
+
 class PythonHandler: @unchecked Sendable {
     static let shared = PythonHandler()
     
     static let scriptsPath = DAWSON.root.appendingPathComponent("python-scripts")
     
     private var sys: PythonObject?
-    private let queue = DispatchQueue(label: "python.handler.queue")
+    private let pyThread = PythonSerialThread()
     
     private init() {}
     
@@ -32,32 +61,44 @@ class PythonHandler: @unchecked Sendable {
         sys = sysModule
     }
     
-    func call(moduleName: String, functionName: String, args: [String: Any] = [:]) throws -> PythonObject {
-        // Only utilize for internal Python code, use sandbox for agent-based actions
-        return try queue.sync {
-            try ensurePython()
-            
-            let module: PythonObject
-            do {
-                module = try Python.attemptImport(moduleName)
-            } catch {
-                throw PythonError.moduleNotFound("\(moduleName), error: \(error)")
-            }
-            
-            let args = try PythonUtilities.toPython(args)
-            
-            guard let function = module.checking[dynamicMember: functionName] else {
-                throw PythonError.functionNotFound(functionName)
-            }
-            let result = try function.throwing.dynamicallyCall(withArguments: args)
-            
-            // Detect Python-side exceptions
-            let builtins = try Python.attemptImport("builtins")
-            if Bool(builtins.isinstance(result, builtins.BaseException)) == true {
-                throw PythonError.pythonExecutionFailed(String(describing: result))
-            }
-            
-            return result
+    private func callRaw(moduleName: String, functionName: String, args: [String: Any]) throws -> PythonObject {
+        // Main Python calls (run ONLY on Python thread)
+        try ensurePython()
+
+        let module: PythonObject
+        do {
+            module = try Python.attemptImport(moduleName)
+        } catch {
+            throw PythonError.moduleNotFound("\(moduleName), error: \(error)")
+        }
+
+        let pyArgs = try PythonUtilities.toPython(args)
+
+        guard let function = module.checking[dynamicMember: functionName] else {
+            throw PythonError.functionNotFound(functionName)
+        }
+        let result = try function.throwing.dynamicallyCall(withArguments: pyArgs)
+
+        // Detect Python-side exceptions
+        let builtins = try Python.attemptImport("builtins")
+        if Bool(builtins.isinstance(result, builtins.BaseException)) == true {
+            throw PythonError.pythonExecutionFailed(String(describing: result))
+        }
+
+        return result
+    }
+
+    func callString(moduleName: String, functionName: String, args: [String: Any] = [:]) throws -> String {
+        // Returns String-based Python result
+        return try pyThread.sync {
+            String(describing: try self.callRaw(moduleName: moduleName, functionName: functionName, args: args))
+        }
+    }
+
+    func callStructured(moduleName: String, functionName: String, args: [String: Any] = [:]) throws -> Any {
+        // Returns Swift Any-based Python result
+        return try pyThread.sync {
+            PythonUtilities.fromPython(try self.callRaw(moduleName: moduleName, functionName: functionName, args: args))
         }
     }
 }

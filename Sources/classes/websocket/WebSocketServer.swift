@@ -17,13 +17,16 @@ final class WebSocketServer: @unchecked Sendable {
     private let maxPacketChars = 32_000
     
     private var connections: [UUID: WebSocket] = [:]
+    private let stateLock = NSLock()
 
     func handle(_ ws: WebSocket) {
         ws.eventLoop.execute { [weak self] in
             guard let self else { return }
             
             let id = UUID()
+            stateLock.lock()
             connections[id] = ws
+            stateLock.unlock()
             
             ws.onText { [weak self] ws, text in
                 Task {
@@ -32,7 +35,10 @@ final class WebSocketServer: @unchecked Sendable {
             }
             
             ws.onClose.whenComplete { [weak self] _ in
-                self?.connections.removeValue(forKey: id)
+                guard let self else { return }
+                self.stateLock.lock()
+                self.connections.removeValue(forKey: id)
+                self.stateLock.unlock()
             }
         }
     }
@@ -72,6 +78,10 @@ final class WebSocketServer: @unchecked Sendable {
             guard let payload: ConfigData = guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
             await handleConfigData(payload, ws: ws)
             
+        case .memoryData:
+            guard let payload: MemoryData = guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
+            await handleMemoryData(payload, ws: ws)
+            
         default:
             await send(WSPacket(type: .error, payload: "Unknown packet type"), ws: ws)
         }
@@ -83,22 +93,28 @@ final class WebSocketServer: @unchecked Sendable {
               let total = packet.total,
               let chunkText: String = guardPayload(packet.payload, dataType: packet.type.rawValue, ws: ws) else { return }
 
+        guard let reassembled = storeChunk(transferUUID, index: index, total: total, chunkText: chunkText) else { return }
+        await onReceive(json: reassembled, ws: ws)
+    }
+    
+    private func storeChunk(_ transferUUID: String, index: Int, total: Int, chunkText: String) -> String? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        
         if (chunkBuffers[transferUUID] == nil) {
             chunkBuffers[transferUUID] = Array(repeating: nil, count: total)
         }
-
+        
         guard (index >= 0),
-              (index < (chunkBuffers[transferUUID]?.count ?? 0)) else { return }
+              (index < (chunkBuffers[transferUUID]?.count ?? 0)) else { return nil }
 
         chunkBuffers[transferUUID]?[index] = chunkText
 
         guard let buffer = chunkBuffers[transferUUID],
-              buffer.allSatisfy({ $0 != nil }) else { return }
+              buffer.allSatisfy({ $0 != nil }) else { return nil }
 
         chunkBuffers.removeValue(forKey: transferUUID)
-
-        let reassembled = buffer.compactMap { $0 }.joined()
-        await onReceive(json: reassembled, ws: ws)
+        return buffer.compactMap { $0 }.joined()
     }
 
     private func send(_ message: WSPacket, ws: WebSocket) async {
@@ -140,7 +156,11 @@ final class WebSocketServer: @unchecked Sendable {
     }
     
     func broadcast(_ message: WSPacket) {
-        for ws in connections.values {
+        stateLock.lock()
+        let sockets = Array(connections.values)
+        stateLock.unlock()
+
+        for ws in sockets {
             sendTask(message, ws: ws)
         }
     }
@@ -490,36 +510,33 @@ extension WebSocketServer {
         guard let query: MemoryQuery = guardPayload(memoryData.payload, dataType: memoryData.dataType.rawValue, ws: ws) else { return }
 
         do {
-            let result: Any
+            let payload: Any
             switch memoryData.dataType {
 
             case .overview:
-                result = try await palace.overview(since: query.since, limit: query.limit)
+                payload = try await palace.overview(limit: query.limit)
 
             case .listWings:
-                result = try await palace.listWings()
+                payload = try await palace.listWings()
 
             case .listRooms:
-                guard let wing = query.wing else {
-                    await send(WSPacket(type: .error, payload: "ListRooms requires wing"), ws: ws)
-                    return
-                }
-                result = try await palace.listRooms(wing: wing)
+                // wing optional per docs: omitted = all rooms across wings
+                payload = try await palace.listRooms(wing: query.wing)
 
             case .pageEntries:
-                result = try await palace.pageEntries(
+                payload = try await palace.pageEntries(
                     wing: query.wing,
                     room: query.room,
-                    before: query.before,
-                    limit: query.limit
+                    limit: query.limit,
+                    offset: query.offset
                 )
-
+                
             case .entry:
                 guard let drawerID = query.drawerID else {
                     await send(WSPacket(type: .error, payload: "Entry requires drawerID"), ws: ws)
                     return
                 }
-                result = try await palace.getEntry(drawerID: drawerID)
+                payload = try await palace.getEntry(drawerID: drawerID)
 
             case .search:
                 guard let q = query.query,
@@ -527,27 +544,25 @@ extension WebSocketServer {
                     await send(WSPacket(type: .error, payload: "Search requires query"), ws: ws)
                     return
                 }
-                result = try await palace.searchStructured(
+                payload = try await palace.searchStructured(
                     query: q,
                     wing: query.wing,
                     room: query.room,
-                    nResults: query.nResults ?? 8
+                    limit: query.limit
                 )
 
             case .delete:
-                guard let dawson = dawson else { return }
-                
                 guard let drawerID = query.drawerID else {
                     await send(WSPacket(type: .error, payload: "Delete requires drawerID"), ws: ws)
                     return
                 }
-                result = try await palace.deleteEntry(drawerID: drawerID)
-                respondToMemoryData(to: memoryData, result: result, ws: ws)
-                dawson.broadcastMemoryDelete(memoryData, drawerID: drawerID)
+                payload = try await palace.deleteEntry(drawerID: drawerID)
+                respondToMemoryData(to: memoryData, payload: AnyCodable(payload), ws: ws)
+                dawson?.broadcastMemoryDelete(memoryData, drawerID: drawerID)
                 return
             }
 
-            respondToMemoryData(to: memoryData, result: result, ws: ws)
+            respondToMemoryData(to: memoryData, payload: AnyCodable(payload), ws: ws)
 
         } catch {
             await send(WSPacket(type: .error, payload: "\(error)"), ws: ws)
@@ -598,12 +613,12 @@ extension WebSocketServer {
         self.sendTask(response, ws: ws)
     }
     
-    private func respondToMemoryData(to request: MemoryData, result: Any, ws: WebSocket) {
+    private func respondToMemoryData(to request: MemoryData, payload: AnyCodable, ws: WebSocket) {
         let response = MemoryData(
             userUUID: request.userUUID,
             dataUUID: request.dataUUID,
             dataType: request.dataType,
-            payload: AnyCodable(jsonSafe(result))
+            payload: payload
         )
         sendTask(WSPacket(type: .memoryData, payload: AnyCodable(response)), ws: ws)
     }

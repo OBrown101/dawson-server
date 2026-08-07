@@ -29,8 +29,7 @@ class MempalaceMemory: @unchecked Sendable {
         ]
         
         do {
-            let result = try PythonHandler.shared.call(moduleName: "mempalace.mcp_server", functionName: "handle_request", args: mcpPayload)
-            return String(describing: result)
+            return try PythonHandler.shared.callString(moduleName: "mempalace.mcp_server", functionName: "handle_request", args: mcpPayload)
         } catch {
             print("MEMPALACE FULL ERROR ↓↓↓")
             print(error)   // full PythonKit error incl. traceback, unclipped
@@ -62,6 +61,10 @@ class MempalaceMemory: @unchecked Sendable {
 }
 
 extension MempalaceMemory {
+    
+    private struct SendableJSON: @unchecked Sendable {
+        let value: Any
+    }
 
     func execStructured(name: String, args: [String: Any]) async throws -> Any {
         setenv("MEMPALACE_PALACE_PATH", MempalaceMemory.palacePath.path, 1)
@@ -75,22 +78,34 @@ extension MempalaceMemory {
             ]
         ]
 
-        let raw: Any = try await withCheckedThrowingContinuation { cont in
+        let bridgeArgs: [String: Any] = [
+            "module": "mempalace.mcp_server",
+            "function": "handle_request",
+            "args": mcpPayload
+        ]
+
+        let jsonString: String = try await withCheckedThrowingContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    let result = try PythonHandler.shared.call(
-                        moduleName: "mempalace.mcp_server",
-                        functionName: "handle_request",
-                        args: mcpPayload
+                    let s = try PythonHandler.shared.callString(
+                        moduleName: "dawson_bridge",
+                        functionName: "call_json",
+                        args: bridgeArgs
                     )
-                    cont.resume(returning: PythonUtilities.fromPython(result))
+                    cont.resume(returning: s)
                 } catch {
                     cont.resume(throwing: MemoryError.pythonFailed("\(error)"))
                 }
             }
         }
 
-        return Self.unwrapMCPEnvelope(raw)
+        guard let data = jsonString.data(using: .utf8),
+              let raw = try? JSONSerialization.jsonObject(with: data) else {
+            throw MemoryError.badResponse("bridge returned non-JSON: \(jsonString.prefix(300))")
+        }
+
+        print("MEMPALACE RAW [\(name)]:", raw)   // keep until first good decode
+        return MempalaceMemory.unwrapMCPEnvelope(raw)
     }
 
     static func unwrapMCPEnvelope(_ raw: Any) -> Any {
@@ -122,67 +137,86 @@ extension MempalaceMemory {
 
 extension MempalaceMemory {
 
-    func overview(since: String?, limit: Int?) async throws -> Any {
-        var status: Any = [:]
+    func overview(limit: Int?) async throws -> MemoryOverview {
+        // Docs don't specify list_drawers ordering
+        // (if oldest-first, flip to offset = max(total - limit, 0) using page.total, then reverse page.drawers)
+        
+        var overview = MemoryOverview(status: nil, recents: [])
+
         do {
-            status = try await execStructured(name: "mempalace_status", args: [:])
+            let raw = try await execStructured(name: "mempalace_status", args: [:])
+            overview.status = try MempalaceMemory.decode(MemoryStatus.self, from: raw)
         } catch {
-            status = ["error": "\(error)"]
+            overview.statusError = "\(error)"
         }
 
-        var args: [String: Any] = ["limit": (limit ?? 25)]
-        if let since {
-            args["since"] = since
-        }
-        var recents: Any = []
         do {
-            recents = try await execStructured(name: "mempalace_list_drawers", args: args)
+            let page = try await pageEntries(wing: nil, room: nil,
+                                             limit: min(limit ?? 25, 100), offset: 0)
+            overview.recents = page.drawers
         } catch {
-            recents = ["error": "\(error)"]
+            overview.recentsError = "\(error)"
         }
 
-        return ["status": status, "recents": recents]
+        return overview
     }
 
-    func listWings() async throws -> Any {
-        try await execStructured(name: "mempalace_list_wings", args: [:])
+    func listWings() async throws -> MemoryWingList {
+        let raw = try await execStructured(name: "mempalace_list_wings", args: [:])
+        return try MempalaceMemory.decode(MemoryWingList.self, from: raw)
     }
 
-    func listRooms(wing: String) async throws -> Any {
-        try await execStructured(name: "mempalace_list_rooms", args: ["wing": wing])
+    func listRooms(wing: String?) async throws -> MemoryRoomList {
+        var args: [String: Any] = [:]
+        if let wing { args["wing"] = wing }
+        let raw = try await execStructured(name: "mempalace_list_rooms", args: args)
+        return try MempalaceMemory.decode(MemoryRoomList.self, from: raw)
     }
 
-    func pageEntries(wing: String?, room: String?, before: String?, limit: Int?) async throws -> Any {
-        // Cursor pagination: pass oldest filed_at from previous page as `before` to fetch next one
-        var args: [String: Any] = ["limit": (limit ?? 25)]
-        if let wing {
-            args["wing"] = wing
+    func pageEntries(wing: String?, room: String?, limit: Int?, offset: Int?) async throws -> MemoryDrawerPage {
+        // Offset pagination per docs (limit ≤ 100, default 20).
+        // Next page: offset = previous offset + drawers.count; done when offset + drawers.count >= total.
+        
+        var args: [String: Any] = [
+            "limit": min(limit ?? 25, 100),
+            "offset": max(offset ?? 0, 0)
+        ]
+        if let wing { args["wing"] = wing }
+        if let room { args["room"] = room }
+        let raw = try await execStructured(name: "mempalace_list_drawers", args: args)
+        return try MempalaceMemory.decode(MemoryDrawerPage.self, from: raw)
+    }
+
+    func searchStructured(query: String, wing: String?, room: String?, limit: Int?) async throws -> MemorySearchResults {
+        var args: [String: Any] = ["query": query, "limit": (limit ?? 8)]
+        if let wing { args["wing"] = wing }
+        if let room { args["room"] = room }
+        let raw = try await execStructured(name: "mempalace_search", args: args)
+        return try MempalaceMemory.decode(MemorySearchResults.self, from: raw)
+    }
+
+    func getEntry(drawerID: String) async throws -> MemoryDrawer {
+        let raw = try await execStructured(name: "mempalace_get_drawer", args: ["drawer_id": drawerID])
+        return try MempalaceMemory.decode(MemoryDrawer.self, from: raw)
+    }
+
+    func deleteEntry(drawerID: String) async throws -> MemoryDeleteResult {
+        let raw = try await execStructured(name: "mempalace_delete_drawer", args: ["drawer_id": drawerID])
+        return try MempalaceMemory.decode(MemoryDeleteResult.self, from: raw)
+    }
+}
+
+extension MempalaceMemory {
+    
+    static func decode<T: Decodable>(_ type: T.Type, from any: Any) throws -> T {
+        guard JSONSerialization.isValidJSONObject(any) else {
+            throw MemoryError.badResponse("not a JSON object: \(Swift.type(of: any))")
         }
-        if let room {
-            args["room"] = room
+        do {
+            let data = try JSONSerialization.data(withJSONObject: any)
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            throw MemoryError.badResponse("decoding \(T.self): \(error)")
         }
-        if let before {
-            args["before"] = before
-        }
-        return try await execStructured(name: "mempalace_list_drawers", args: args)
-    }
-
-    func searchStructured(query: String, wing: String?, room: String?, nResults: Int) async throws -> Any {
-        var args: [String: Any] = ["query": query, "n_results": nResults]
-        if let wing {
-            args["wing"] = wing
-        }
-        if let room {
-            args["room"] = room
-        }
-        return try await execStructured(name: "mempalace_search", args: args)
-    }
-
-    func getEntry(drawerID: String) async throws -> Any {
-        try await execStructured(name: "mempalace_get_drawer", args: ["drawer_id": drawerID])
-    }
-
-    func deleteEntry(drawerID: String) async throws -> Any {
-        try await execStructured(name: "mempalace_delete_drawer", args: ["drawer_id": drawerID])
     }
 }

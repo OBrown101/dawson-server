@@ -100,13 +100,13 @@ final class ReadPDF: PermissionAware {
         }
 
         do {
-            let result = try PythonHandler.shared.call(
+            let result = try PythonHandler.shared.callString(
                 moduleName: "pdf_reader",
                 functionName: "read_pdf",
                 args: pythonArgs
             )
 
-            return String(describing: result)
+            return result
         } catch {
             return "Error reading PDF: \(error)"
         }
