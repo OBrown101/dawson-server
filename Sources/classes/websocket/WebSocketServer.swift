@@ -512,17 +512,17 @@ extension WebSocketServer {
         do {
             let payload: Any
             switch memoryData.dataType {
-
+                
             case .overview:
                 payload = try await palace.overview(limit: query.limit)
-
+                
             case .listWings:
                 payload = try await palace.listWings()
-
+                
             case .listRooms:
                 // wing optional per docs: omitted = all rooms across wings
                 payload = try await palace.listRooms(wing: query.wing)
-
+                
             case .pageEntries:
                 payload = try await palace.pageEntries(
                     wing: query.wing,
@@ -539,7 +539,7 @@ extension WebSocketServer {
                     return
                 }
                 payload = try await palace.getEntry(drawerID: drawerID)
-
+                
             case .search:
                 guard let q = query.query,
                       (!q.isEmpty) else {
@@ -555,16 +555,22 @@ extension WebSocketServer {
                     maxDistance: query.maxDistance,
                     sourceFile: query.sourceFile
                 )
-
+                
             case .delete:
-                guard let drawerID = query.drawerID else {
-                    await send(WSPacket(type: .error, payload: "Delete requires drawerID"), ws: ws)
+                let resolvedID: String
+                if let drawerID = query.drawerID {
+                    resolvedID = drawerID
+                } else if let content = query.content {
+                    resolvedID = try await palace.resolveDrawerID(
+                        content: content,
+                        wing: query.wing,
+                        room: query.room
+                    )
+                } else {
+                    await send(WSPacket(type: .error, payload: "delete requires drawerID or content"), ws: ws)
                     return
                 }
-                payload = try await palace.deleteEntry(drawerID: drawerID)
-                respondToMemoryData(to: memoryData, payload: AnyCodable(payload), ws: ws)
-                dawson?.broadcastMemoryDelete(memoryData, drawerID: drawerID)
-                return
+                payload = try await palace.deleteEntry(drawerID: resolvedID)
             }
 
             respondToMemoryData(to: memoryData, payload: AnyCodable(payload), ws: ws)

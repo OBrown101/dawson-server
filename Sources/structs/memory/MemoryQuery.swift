@@ -20,6 +20,7 @@ struct MemoryQuery: Codable {
     var before: String?         // ISO date(-time), exclusive, filed_at filter
 
     // Search (mempalace_search)
+    var content: String?        // find drawerId from verbatim content (from search results)
     var query: String?          // keywords ONLY, ≤ 250 chars per schema
     var context: String?        // background text; reserved for re-ranking, not embedded
     var maxDistance: Double?    // cosine distance cutoff, 0 disables (server default 1.5)

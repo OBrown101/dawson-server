@@ -18,5 +18,8 @@ struct MemoryRoomList: Codable {
         rooms = MemoryWingList.sortedCounts(dict)
     }
 
-    enum CodingKeys: String, CodingKey { case wing, rooms }
+    enum CodingKeys: String, CodingKey {
+        case wing
+        case rooms
+    }
 }

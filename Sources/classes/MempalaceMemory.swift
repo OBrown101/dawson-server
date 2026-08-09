@@ -231,6 +231,38 @@ extension MempalaceMemory {
         let raw = try await execStructured(name: "mempalace_delete_drawer", args: ["drawer_id": drawerID])
         return try MempalaceMemory.decode(MemoryDeleteResult.self, from: raw)
     }
+    
+    func resolveDrawerID(content: String, wing: String?, room: String?) async throws -> String {
+        // Search results carry no drawer id — resolve one from verbatim content (via check_duplicate).
+        // Matches are best-first
+        let raw = try await execStructured(
+            name: "mempalace_check_duplicate",
+            args: ["content": content, "threshold": 0.98]
+        )
+
+        guard let dict = raw as? [String: Any] else {
+            throw MemoryError.badResponse("unexpected check_duplicate response")
+        }
+        if (dict["vector_disabled"] as? Bool) == true {
+            throw MemoryError.badResponse("duplicate detection unavailable (vector index disabled) — run `mempalace repair`")
+        }
+        guard let matches = dict["matches"] as? [[String: Any]],
+              let best = matches.first,
+              let id = best["id"] as? String else {
+            throw MemoryError.badResponse("no matching drawer found for content delete")
+        }
+
+        // Never delete a near-twin filed elsewhere: if the caller knows the
+        // drawer's location, the resolved match must agree.
+        if let wing, let matchWing = best["wing"] as? String, (matchWing != wing) {
+            throw MemoryError.badResponse("resolved drawer is in a different wing (\(matchWing)) — not deleting")
+        }
+        if let room, let matchRoom = best["room"] as? String, (matchRoom != room) {
+            throw MemoryError.badResponse("resolved drawer is in a different room (\(matchRoom)) — not deleting")
+        }
+
+        return id
+    }
 }
 
 extension MempalaceMemory {
