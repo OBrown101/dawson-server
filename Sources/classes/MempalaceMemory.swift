@@ -15,6 +15,8 @@ class MempalaceMemory: @unchecked Sendable {
     static let mempalacePath = DAWSON.root.appendingPathComponent(".mempalace")
     static let palacePath = mempalacePath.appendingPathComponent("palace")
     
+    private var storageCache: (bytes: Int64, at: Date)? = nil
+    
     private let server = MCPServerProcess(
         name: "mempalace",
         executable: PythonEnv.pythonExecPath,
@@ -149,7 +151,15 @@ extension MempalaceMemory {
         // Widens if the recent window is quiet.
 
         var overview = MemoryOverview(status: nil, recents: [])
+        overview.storageBytes = palaceStorageBytes()
 
+        do {
+            let raw = try await execStructured(name: "mempalace_status", args: [:])
+            overview.status = try MempalaceMemory.decode(MemoryStatus.self, from: raw)
+        } catch {
+            overview.statusError = "\(error)"
+        }
+        
         let want = min(limit ?? 25, 100)
         for days in [14, 90, nil as Int?] {
             do {
@@ -266,6 +276,26 @@ extension MempalaceMemory {
 }
 
 extension MempalaceMemory {
+
+    func palaceStorageBytes() -> Int64? {
+        let secBetweenUpdate = TimeInterval(60 * 10) // 10min
+        
+        if let cache = storageCache, (Date().timeIntervalSince(cache.at) < secBetweenUpdate) {
+            return cache.bytes
+        }
+        guard let enumerator = FileManager.default.enumerator(
+            at: MempalaceMemory.palacePath,
+            includingPropertiesForKeys: [.totalFileAllocatedSizeKey, .fileSizeKey]
+        ) else { return storageCache?.bytes }
+
+        var total: Int64 = 0
+        for case let url as URL in enumerator {
+            let values = try? url.resourceValues(forKeys: [.totalFileAllocatedSizeKey, .fileSizeKey])
+            total += Int64(values?.totalFileAllocatedSize ?? values?.fileSize ?? 0)
+        }
+        storageCache = (total, Date())
+        return total
+    }
 
     static func isoDate(daysAgo: Int) -> String {
         let date = Date().addingTimeInterval(-Double(daysAgo) * 86_400)

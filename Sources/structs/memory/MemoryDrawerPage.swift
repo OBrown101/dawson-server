@@ -16,10 +16,15 @@ struct MemoryDrawerPage: Codable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         drawers = try c.decodeIfPresent([MemoryDrawer].self, forKey: .drawers) ?? []
-        total   = try c.decodeIfPresent(Int.self, forKey: .total)
-        limit   = try c.decodeIfPresent(Int.self, forKey: .limit)
-        offset  = try c.decodeIfPresent(Int.self, forKey: .offset)
+        total = try c.decodeIfPresent(Int.self, forKey: .total)
+        limit = try c.decodeIfPresent(Int.self, forKey: .limit)
+        offset = try c.decodeIfPresent(Int.self, forKey: .offset)
     }
 
-    enum CodingKeys: String, CodingKey { case drawers, total, limit, offset }
+    enum CodingKeys: String, CodingKey {
+        case drawers
+        case total
+        case limit
+        case offset
+    }
 }

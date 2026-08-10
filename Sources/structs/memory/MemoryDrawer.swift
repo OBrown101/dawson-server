@@ -18,7 +18,7 @@ struct MemoryDrawer: Codable {
     var filedAt: String?        // not documented; captured when present in metadata
     var similarity: Double?     // search results only
 
-    // Inbound: accept documented + plausible key variants.
+    // Inbound from Mempalace MCP
     private enum In: String, CodingKey {
         case id, drawerId = "drawer_id"
         case content, preview, content_preview, text
@@ -32,7 +32,7 @@ struct MemoryDrawer: Codable {
         case metadata
     }
 
-    // Outbound: Dawson's stable wire keys.
+    // Outbound to Dawson client (e.g. Beakshield)
     private enum Out: String, CodingKey {
         case id
         case content

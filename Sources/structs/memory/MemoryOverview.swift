@@ -10,6 +10,7 @@ import Foundation
 struct MemoryOverview: Codable {
     var status: MemoryStatus?
     var recents: [MemoryDrawer]
+    var storageBytes: Int64?
     var statusError: String?
     var recentsError: String?
 }
