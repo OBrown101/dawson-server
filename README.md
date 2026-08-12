@@ -236,3 +236,37 @@ There are already excellent terminal harnesses.
 DAWSON isn't trying to replace them.
 
 Instead, the goal is to build a cohesive ecosystem that is intuitive for users while remaining approachable for engineers who want to contribute, extend, and experiment with the platform.
+
+---
+
+# License & Sustainability
+
+**The part of DAWSON that touches your machine is open. The parts that
+are conveniences I operate or package are how the project pays for
+itself.** Concretely:
+
+- **DAWSON server** — [AGPL-3.0](LICENSE). This is the component with
+  access to your files, your shell, and your agent memory. You can read
+  every line, build it yourself, modify it, and redistribute it. The AGPL
+  ensures any distributed or network-hosted modification stays equally
+  open.
+- **Brand assets** — the DAWSON/Beakshield names, mascot, and artwork
+  are [proprietary](LICENSE-ASSETS.md). Fork the code freely; forks
+  must use their own name and art.
+- **Beakshield** — source-available under the
+  [Functional Source License](https://github.com/OBrown101/beakshield/blob/main/LICENSE):
+  fully auditable and free to build for your own use, with each release
+  becoming Apache-2.0 two years after publication. Official desktop
+  builds are free; (future) official mobile builds will be paid.
+- **Paid, always optional** — official mobile apps and (eventually) a
+  remote-access relay subscription. Localhost and VPN connections are
+  free forever; nothing about the core requires a subscription.
+
+Why this structure: DAWSON exists because I wanted an agent I could
+fully audit before giving it access to my machine. That promise — open,
+inspectable code wherever host access is involved — is permanent. The
+paid conveniences exist so I can keep building it.
+
+Third-party components are listed in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Contributions are
+welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
