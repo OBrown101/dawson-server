@@ -55,7 +55,7 @@ Each item is marked with its current implementation status.
 
 ---
 
-## 🦉 A Persistent Orchestrator *[In-Progress]*
+## 🦉 A Persistent Orchestrator *[Working]*
 
 <img src="assets/screenshots/dawson-profile.png"
      align="right"
@@ -97,7 +97,7 @@ Instead of isolated chat histories, the kingdom continuously builds a shared bod
 
 ---
 
-## 🔍 Knowledge You Can Actually See *[Planned]*
+## 🔍 Knowledge You Can Actually See *[Working]*
 
 Many AI systems store memories behind the scenes with little visibility into what has actually been remembered.
 
@@ -190,9 +190,11 @@ With those foundations in place, future development will focus on expanding DAWS
 
 ## ✅ Working
 
+- Persistent DAWSON orchestrator
 - Multi-agent architecture
 - Dedicated chat agents (Squirebots)
 - Shared MemPalace integration
+- Knowledge browser
 - Claude Skills integration
 - Permission-aware security modes
 - OpenAI support
@@ -206,7 +208,6 @@ With those foundations in place, future development will focus on expanding DAWS
 
 ## 🚧 In Progress
 
-- Persistent DAWSON orchestrator
 - Beakshield dashboard
 - Available tools expansion
 
@@ -215,7 +216,6 @@ With those foundations in place, future development will focus on expanding DAWS
 ## 📅 Planned
 
 - User profiles
-- Knowledge browser
 - Long-running background tasks
 - Live activity monitoring
 - Royal Decrees
