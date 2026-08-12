@@ -228,8 +228,8 @@ class Agent: Codable, @unchecked Sendable {
     func cancelCurrentRun() async {
         suspendData = nil
         state = .ready
-        saveMetadata()
         updatedTimestamp = Date.now.epochMillis
+        saveMetadata()
         syncSavedSuspension()
         await runner.stop()
     }
@@ -374,13 +374,14 @@ class Agent: Codable, @unchecked Sendable {
             }
             
             saveMessagesToHistory(loopMessages, agentUUID: uuid)
-            saveMetadata()
             
             if let newState = newState {
                 await onEvent(.agentState(newState), runUUID)
                 self.state = newState
+                self.updatedTimestamp = Date.now.epochMillis
             }
             
+            saveMetadata()
             syncSavedSuspension()
             
             await runner.stop()
@@ -476,13 +477,14 @@ class Agent: Codable, @unchecked Sendable {
             
             let newOnlyMessages = Array(loopMessages.dropFirst(originalMessageCount))
             saveMessagesToHistory(newOnlyMessages, agentUUID: self.uuid)
-            saveMetadata()
             
             if let newState = newState {
                 await onEvent(.agentState(newState), runUUID)
                 self.state = newState
+                self.updatedTimestamp = Date.now.epochMillis
             }
             
+            saveMetadata()
             syncSavedSuspension()
             
             await runner.stop()
