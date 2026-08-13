@@ -111,7 +111,7 @@ extension DAWSON {
             return
         }
         AgentHandler.shared.spawnAgent(uuid: DAWSON.primaryAgentUUID, userUUID: userUUID, type: .dawson, model: model)
-        let newChat = Chat(uuid: DAWSON.primaryChatUUID, userUUID: DAWSON.primaryChatTitle, agentUUID: userUUID, title: DAWSON.primaryAgentUUID)
+        let newChat = Chat(uuid: DAWSON.primaryChatUUID, userUUID: userUUID, agentUUID: DAWSON.primaryAgentUUID, title: DAWSON.primaryChatTitle)
         activeChats[DAWSON.primaryChatUUID] = newChat
         newChat.saveMetadata()
         print("Primary chat created for user (\(userUUID))")
