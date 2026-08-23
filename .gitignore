@@ -39,6 +39,7 @@ config.properties
 .dawson_scratch/
 CLAUDE.md
 DAWSON.md
+TODOS.md
 
 # MemPalace specific
 mempalace.yaml

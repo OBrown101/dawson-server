@@ -50,6 +50,7 @@ final class PythonSandbox {
             writable.append(agentScratch)
         }
         let readOnly = spec.readOnlyDirectories.map(FileUtilities.canonicalFilePath)
+        let executable = spec.executableDirectories.map(FileUtilities.canonicalFilePath)
         let pythonHome = FileUtilities.canonicalFilePath(PythonEnv.pythonHome.path)
 
         // Per-run temp dir: TMPDIR/HOME for the child, deleted afterwards.
@@ -69,6 +70,7 @@ final class PythonSandbox {
             pythonHome: pythonHome,
             writable: writable + [runTemp.path],
             readOnly: readOnly,
+            executable: executable,
             allowNetwork: spec.allowNetwork
         )
         #elseif os(Linux)
@@ -77,6 +79,7 @@ final class PythonSandbox {
             pythonHome: pythonHome,
             writable: writable + [runTemp.path],
             readOnly: readOnly,
+            executable: executable,
             allowNetwork: spec.allowNetwork
         )
         #else
@@ -141,6 +144,9 @@ final class PythonSandbox {
         if let agentScratch {
             env["DAWSON_SCRATCH"] = agentScratch
         }
+        
+        env.merge(DeveloperTools.hostToolchainEnvironment) { _, pinned in pinned }
+        
         return env
     }
 }
@@ -167,6 +173,7 @@ extension PythonSandbox {
         pythonHome: String,
         writable: [String],
         readOnly: [String],
+        executable: [String],
         allowNetwork: Bool
     ) -> String {
         let writableRules = writable
@@ -174,6 +181,9 @@ extension PythonSandbox {
             .joined(separator: "\n")
         let readOnlyRules = readOnly
             .map { "(allow file-read* (subpath \"\(sbEscape($0))\"))" }
+            .joined(separator: "\n")
+        let executableRules = executable
+            .map { "(subpath \"\(sbEscape($0))\")" }
             .joined(separator: "\n")
         let networkRule = allowNetwork ? "(allow network*)\n(allow system-socket)" : "; network denied by default"
 
@@ -187,7 +197,8 @@ extension PythonSandbox {
           (subpath "\(sbEscape(pythonHome))")
           (subpath "/usr/lib")
           (subpath "/bin")
-          (subpath "/usr/bin"))
+          (subpath "/usr/bin")
+          \(executableRules))
         (allow signal (target same-sandbox))
 
         ; --- baseline reads the interpreter/dyld/CoreFoundation need ---
@@ -203,7 +214,8 @@ extension PythonSandbox {
           (literal "/dev/null")
           (literal "/dev/zero")
           (literal "/dev/random")
-          (literal "/dev/urandom"))
+          (literal "/dev/urandom")
+          \(executableRules))
         (allow file-write-data
           (literal "/dev/null"))
         (allow sysctl-read)
@@ -225,6 +237,7 @@ extension PythonSandbox {
         pythonHome: String,
         writable: [String],
         readOnly: [String],
+        executable: [String],
         allowNetwork: Bool
     ) throws -> Prepared {
         let sandboxExec = "/usr/bin/sandbox-exec"
@@ -236,6 +249,7 @@ extension PythonSandbox {
             pythonHome: pythonHome,
             writable: writable,
             readOnly: readOnly,
+            executable: executable,
             allowNetwork: allowNetwork
         )
 
@@ -276,6 +290,7 @@ extension PythonSandbox {
         pythonHome: String,
         writable: [String],
         readOnly: [String],
+        executable: [String],
         allowNetwork: Bool
     ) throws -> Prepared {
         guard let bwrap = findBwrap() else {
@@ -310,6 +325,9 @@ extension PythonSandbox {
 
         args += ["--ro-bind", pythonHome, pythonHome]
         for path in readOnly where fm.fileExists(atPath: path) {
+            args += ["--ro-bind", path, path]
+        }
+        for path in executable where fm.fileExists(atPath: path) {
             args += ["--ro-bind", path, path]
         }
         for path in writable {

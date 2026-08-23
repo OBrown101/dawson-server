@@ -179,6 +179,7 @@ class RunCommand: PermissionAware {
                 // workspace writable, network denied.
                 var spec = SandboxSpec(writableDirectories: workspaces)
                 spec.allowNetwork = false
+                spec.executableDirectories = DeveloperTools.hostToolchainPaths
                 spec.timeout = timeout
 
                 let sandboxResult = try await Task.detached(priority: .userInitiated) {
