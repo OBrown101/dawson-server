@@ -48,6 +48,8 @@ app.webSocket("dawson", maxFrameSize: 64_000) { req, ws in
     DAWSON.shared.server.handle(ws)
 }
 
+try VoiceHandler.register(app)
+
 print("Secure WebSocket running...")
 
 try await app.execute()
