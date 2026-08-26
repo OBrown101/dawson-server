@@ -103,6 +103,8 @@ class Loader: @unchecked Sendable {
         Do not call `\(fullSkillTool)` for simple questions, brief explanations, casual conversation, or tasks that do not benefit from a specialized workflow.
 
         A skill's directory only contains the skill itself. It is **not** the project or data you should operate on unless the user explicitly tells you to work there.
+        
+        Skills may reference bundled files (references/, agents/, assets/) — load them with \(GetFullSkill.name) by passing file_path."
 
         Available skills:
 

@@ -91,7 +91,8 @@ class Agent: Codable, @unchecked Sendable {
         ]
     }
     private static var requiredTools: [Tool] {
-        [RequestUserInput(), EnvAwareness(), GetFullSkill(), GetSessionInfo()] + Agent.memoryTools
+        [RequestUserInput(), EnvAwareness(), GetFullSkill(),
+         GetSessionInfo(), ValidateSkill(), PackageSkill()] + Agent.memoryTools
     }
     private static var memoryTools: [Tool] {
         [
@@ -139,7 +140,7 @@ class Agent: Codable, @unchecked Sendable {
         thoughtWindow: Int,
         contextWindow: Int32,
         useThinking: Bool = true,
-        directories: [String] = [DAWSON.root.path],
+        directories: [String] = [],
         createdTimestamp: Int64 = Date.now.epochMillis,
         updatedTimestamp: Int64 = Date.now.epochMillis
     ) {

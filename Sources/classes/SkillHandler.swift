@@ -60,45 +60,11 @@ class SkillHandler: @unchecked Sendable {
 
 extension SkillHandler {
     private func parseMetadata(content: String, directoryPath: String) -> SkillMetadata? {
-        /* Skill metadata format:
-        ---
-        name: project-review
-        description: Rapidly review a new software project...
-        ---
-        */
-        
-        let lines = content.components(separatedBy: .newlines)
-        
-        // Must begin with frontmatter delimiter.
-        guard lines.first?.trimmingCharacters(in: .whitespacesAndNewlines) == "---" else {
-            return nil
-        }
-        
-        var name: String?
-        var description: String?
-        var insideFrontmatter = true
-        
-        for line in lines.dropFirst() {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // End of frontmatter
-            if trimmed == "---" {
-                insideFrontmatter = false
-                break
-            }
-            
-            guard insideFrontmatter else { break }
-            
-            if trimmed.hasPrefix("name:") {
-                name = extractValue(from: trimmed, key: "name:")
-            } else if trimmed.hasPrefix("description:") {
-                description = extractValue(from: trimmed, key: "description:")
-            }
-        }
+        guard let fields = frontmatterFields(content) else { return nil }
         
         guard
-            let skillName = name,
-            let skillDescription = description,
+            let skillName = fields["name"],
+            let skillDescription = fields["description"],
             !skillName.isEmpty,
             !skillDescription.isEmpty
         else {
@@ -111,18 +77,134 @@ extension SkillHandler {
             directoryPath: directoryPath
         )
     }
-    
-    // Extracts and unquotes a YAML scalar value.
-    private func extractValue(from line: String, key: String) -> String {
-        var value = line.dropFirst(key.count).trimmingCharacters(in: .whitespacesAndNewlines)
+    func frontmatterFields(_ content: String) -> [String: String]? {
+        /// Pragmatic YAML frontmatter parser covering the shapes real (Claude-style) skills use:
+        ///   key: value                      plain scalar
+        ///   key: "value" / 'value'      quoted scalar
+        ///   key: >- (or >, >+)           folded block  → lines joined with spaces
+        ///   key: |- (or |, |+)               literal block → lines joined with newlines
+        ///   key: value                      plain multi-line: indented continuation
+        ///        wrapped continuation...      lines are folded into the value
+        ///   # comment lines, blank lines, unknown keys, and nested structures
+        ///   under unknown keys are skipped without derailing known keys.
+        /// Frontmatter must start at line 1 with --- and closes at --- or ...
         
-        // Remove matching single or double quotes if present.
-        if (value.hasPrefix("\"") && value.hasSuffix("\"")) ||
-           (value.hasPrefix("'") && value.hasSuffix("'")) {
-            value.removeFirst()
-            value.removeLast()
+        let lines = content.components(separatedBy: .newlines)
+
+        guard (trimmed(lines.first ?? "") == "---") else { return nil }
+
+        // Find the closing delimiter
+        var end = -1
+        for index in 1..<lines.count {
+            let line = trimmed(lines[index])
+            if ((line == "---") || (line == "...")) {
+                end = index
+                break
+            }
         }
-        
-        return value
+        guard (end > 1) else { return nil }
+
+        var fields: [String: String] = [:]
+        var i = 1
+
+        while (i < end) {
+            let raw = lines[i]
+            let line = trimmed(raw)
+
+            // Blank lines, comments, and indented lines (content of an
+            // unknown key's block/nested map) — skip.
+            if (line.isEmpty || line.hasPrefix("#") || isIndented(raw)) {
+                i += 1
+                continue
+            }
+
+            // Top-level "key: ..." — anything else is malformed; skip it.
+            guard let colonIndex = raw.firstIndex(of: ":") else {
+                i += 1
+                continue
+            }
+
+            let key = trimmed(String(raw[raw.startIndex..<colonIndex])).lowercased()
+            var value = trimmed(String(raw[raw.index(after: colonIndex)...]))
+
+            // Strip a trailing comment from unquoted scalars (" # ...")
+            if !value.hasPrefix("\""),
+               !value.hasPrefix("'"),
+               let commentRange = value.range(of: " #") {
+                value = trimmed(String(value[value.startIndex..<commentRange.lowerBound]))
+            }
+
+            if (isBlockIndicator(value)) {
+                // Folded (>) or literal (|) block: consume indented lines
+                let folded = value.hasPrefix(">")
+                var block: [String] = []
+                var j = i + 1
+                while (j < end) {
+                    let blockRaw = lines[j]
+                    let blockLine = trimmed(blockRaw)
+                    if (blockLine.isEmpty) {
+                        block.append("")
+                        j += 1
+                        continue
+                    }
+                    guard (isIndented(blockRaw)) else { break }
+                    block.append(blockLine)
+                    j += 1
+                }
+                while (block.last?.isEmpty == true) {
+                    block.removeLast()
+                }
+                value = (folded) ? block.filter { !$0.isEmpty }.joined(separator: " ") : block.joined(separator: "\n")
+                i = j
+            } else {
+                value = unquote(value)
+
+                // Plain multi-line: indented continuation lines fold in.
+                // (Also covers "key:" on its own line with indented content.)
+                var j = i + 1
+                while (j < end) {
+                    let contRaw = lines[j]
+                    let contLine = trimmed(contRaw)
+                    if contLine.isEmpty { break }
+                    guard isIndented(contRaw),
+                            !contLine.hasPrefix("#") else { break }
+                    value = (value.isEmpty) ? contLine : (value + " " + contLine)
+                    j += 1
+                }
+                i = j
+            }
+
+            if (!key.isEmpty) {
+                fields[key] = value
+            }
+        }
+
+        return fields
+    }
+}
+
+extension SkillHandler {
+    
+    private func isBlockIndicator(_ value: String) -> Bool {
+        return ["|", "|-", "|+", ">", ">-", ">+"].contains(value)
+    }
+
+    private func isIndented(_ raw: String) -> Bool {
+        return raw.hasPrefix(" ") || raw.hasPrefix("\t")
+    }
+
+    private func trimmed(_ string: String) -> String {
+        return string.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func unquote(_ value: String) -> String {
+        // Removes matching single or double quotes if present.
+        var result = value
+        if (result.hasPrefix("\"") && result.hasSuffix("\"") && (result.count >= 2)) ||
+           (result.hasPrefix("'") && result.hasSuffix("'") && (result.count >= 2)) {
+            result.removeFirst()
+            result.removeLast()
+        }
+        return result
     }
 }

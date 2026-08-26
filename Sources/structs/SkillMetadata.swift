@@ -15,7 +15,14 @@ struct SkillMetadata: Sendable, Codable {
     let description: String
     let directoryPath: String   // To specific skill folder
     
-    var skillFilePath: String { // To SKILL.md file
+    var skillFilePath: String {
+        // To SKILL.md file
         return URL(fileURLWithPath: directoryPath).appendingPathComponent("SKILL.md").path
+    }
+    
+    func resourceURL(_ relativePath: String) -> URL {
+        URL(fileURLWithPath: directoryPath)
+            .appendingPathComponent(relativePath)
+            .standardizedFileURL
     }
 }
