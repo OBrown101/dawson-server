@@ -93,9 +93,7 @@ class FledglingMode: Mode {
                 guard (inDirectories) else { throw ModePermissionError.forbidden }
             case .delegate:
                 break
-            case .install:
-                throw ModePermissionError.forbidden
-            case .web:
+            case .install, .web:
                 break
             case .harness:
                 throw ModePermissionError.forbidden

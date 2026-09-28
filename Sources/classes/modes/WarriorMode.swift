@@ -30,7 +30,8 @@ class WarriorMode: Mode {
             case .install:
                 evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: request.reason ?? "Installing a package, software, etc. permanently alters the shared Python environment and requires your approval.")))
             case .web:
-                evaluations.append(PermissionEvaluation(request: request, decision: .allowed))
+//                evaluations.append(PermissionEvaluation(request: request, decision: .allowed))    // UNCOMMENT ONCE TESTED AND SAFE
+                evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: request.reason ?? "Web access requires your approval in Warrior mode.")))
             case .harness:
                 evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: request.reason ?? "Modifying the harness affects all future agents and requires your approval.")))
             }
@@ -62,7 +63,8 @@ class WarriorMode: Mode {
         case .install:
             return "Installing packages, software, etc. permanently changes the shared Python environment, so each install requires your approval in Warrior mode."
         case .web:
-            return "Web access is permitted in Warrior mode."
+//            return "Web access is permitted in Warrior mode." // UNCOMMENT ONCE TESTED AND SAFE
+            return "Each web access requires your approval in Warrior mode."
         case .harness:
             return "Changes to the harness affect all future agents, so each requires your approval in Warrior mode."
         }
@@ -77,13 +79,7 @@ class WarriorMode: Mode {
                 guard let path = request.target else { break }
                 let inDirectories = FileUtilities.inSessionDirectories(path: path, directories: agent.effectiveDirectories)
                 guard (inDirectories) else { throw ModePermissionError.forbidden }
-            case .delegate:
-                break
-            case .install:
-                break
-            case .web:
-                break
-            case .harness:
+            case .delegate, .install, .web, .harness:
                 break
             }
         }

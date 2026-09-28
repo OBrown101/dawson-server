@@ -128,8 +128,13 @@ final class ProviderClient: Sendable {
                     request.httpBody = payloadData
                     
                     let sessionConfig = URLSessionConfiguration.default
-                    sessionConfig.timeoutIntervalForRequest = 800
-                    sessionConfig.timeoutIntervalForResource = 800
+                    switch llmType {
+                    case .ollama:
+                        sessionConfig.timeoutIntervalForRequest = 14_400
+                    default:
+                        sessionConfig.timeoutIntervalForRequest = 800
+                    }
+                    sessionConfig.timeoutIntervalForResource = 86_400
                     let session = URLSession(configuration: sessionConfig)
                     
                     let (bytes, response) = try await session.bytes(for: request)

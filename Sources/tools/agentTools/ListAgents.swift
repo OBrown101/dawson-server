@@ -113,7 +113,7 @@ class ListAgents: ChatAware {
             }
             
             return """
-            • \(agent.type.name) [\(ownership)] [\(agent.state)] [\(agent.uuid)] [birth: \(agent.createdTimestamp)(epoch-millis)]\(approvalNote)
+            • \(agent.name) [\(agent.type.name)] [\(ownership)] [\(agent.state)] [\(agent.uuid)] [birth: \(agent.createdTimestamp)(epoch-millis)]\(approvalNote)
               Chat UUID: \(agentChat?.uuid ?? "-") [created: \(createdTimestamp)(epoch-millis)]
               Topic: \(topic)
               Mode: \(modeText) | Model: \(agent.model.name)

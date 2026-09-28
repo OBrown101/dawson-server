@@ -13,7 +13,7 @@ import Foundation
 class AgentHandler: @unchecked Sendable {
     static let shared = AgentHandler()
     
-    static let defaultThoughtWindow = 60
+    static let defaultThoughtWindow = 500
     static let defaultContextWindow: Int32 = 128_000
     
     private var activeAgents: [String: Agent] = [:]

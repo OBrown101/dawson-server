@@ -116,7 +116,7 @@ final class OpenAIProvider: LLMProvider {
         if (useOAuth) {
             // Codex backend has no /v1/models; models are fixed by plan
             // Hardcoded for now, eventually need Beakshield allow user update list
-            return ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"].map { LLMModel(id: $0, name: $0, provider: .openai) }
+            return ["gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"].map { LLMModel(id: $0, name: $0, provider: .openai) }
         }
         
         let json = try await ProviderClient.shared.fetchJSON(llmType: .openai)

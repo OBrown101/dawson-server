@@ -106,9 +106,24 @@ final class OllamaProvider: LLMProvider {
 
 extension OllamaProvider {
     private func toOllamaMessages(_ messages: [Message]) -> [[String: Any]] {
+        // Strict chat templates (e.g. qwen3) allow only a SINGLE system
+        // message, and only at index 0. Merge all system messages into one.
+        let systemTexts = messages
+            .filter { $0.role == MsgSource.system.name }
+            .compactMap { $0.text }
+            .filter { !$0.isEmpty }
+        let nonSystem = messages.filter { $0.role != MsgSource.system.name }
+
         var result: [[String: Any]] = []
 
-        for message in messages {
+        if (!systemTexts.isEmpty) {
+            result.append([
+                "role": MsgSource.system.name,
+                "content": systemTexts.joined(separator: "\n\n")
+            ])
+        }
+
+        for message in nonSystem {
             var msgDict: [String: Any] = [
                 "role": message.role,
                 "content": message.text ?? ""

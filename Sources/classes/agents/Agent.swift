@@ -86,6 +86,7 @@ class Agent: Codable, @unchecked Sendable {
             RunPythonScript(workspace: { self.directories }),
             RunPythonCode(workspace: { self.directories }),
             RunCommand(workspace: { self.directories }, mode: { self.mode }),
+            SearchWeb(), FetchURL(),
             ListAgents(), TalkToAgent(), DelegateTask(), ReleaseWorker(),
             CreateChat(), UpdateAgent()
         ]
