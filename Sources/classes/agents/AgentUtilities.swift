@@ -253,4 +253,24 @@ class AgentUtilities {
             return Message(runUUID: runUUID, role: MsgSource.user.name, text: "Failed to attach image for visual analysis: \(error.localizedDescription)")
         }
     }
+    
+    static func estimatedTokens(_ messages: [Message]) -> Int {
+        // Rough token estimate: ~4 chars/token plus per-message structural overhead.
+        messages.reduce(0) { total, m in
+            var chars = m.text?.count ?? 0
+            if let calls = m.toolCalls {
+                chars += calls.reduce(0) { sum, c in
+                    sum + c.name.count + c.arguments.reduce(0) { $0 + $1.key.count + String(describing: $1.value.value).count }
+                }
+            }
+            return total + (chars / 4) + 8
+        }
+    }
+
+    static func clampToolOutput(_ text: String, maxChars: Int = 40_000) -> String {
+        // Clamp single tool output, prevents one result from dominating window.
+        guard (text.count > maxChars) else { return text }
+        let head = String(text.prefix(maxChars))
+        return head + "\n\n[... output truncated at \(maxChars) chars (\(text.count) total) to protect the context window. Re-run the tool with a narrower query if more is needed. ...]"
+    }
 }

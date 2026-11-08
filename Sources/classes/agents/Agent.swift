@@ -88,7 +88,8 @@ class Agent: Codable, @unchecked Sendable {
             RunCommand(workspace: { self.directories }, mode: { self.mode }),
             SearchWeb(), FetchURL(),
             ListAgents(), TalkToAgent(), DelegateTask(), ReleaseWorker(),
-            CreateChat(), UpdateAgent()
+            CreateChat(), UpdateAgent(),
+            MCPTool(workspace: { self.directories }, mode: { self.mode })
         ]
     }
     private static var requiredTools: [Tool] {
@@ -122,6 +123,10 @@ class Agent: Codable, @unchecked Sendable {
                 return (child == root) || (child + "/").hasPrefix(r)
             }
         }
+    }
+    
+    var effectiveContextWindow: Int32 {
+        (model.provider == .ollama) ? contextWindow : model.resolvedContextTokens
     }
     
     var isPrimaryAgent: Bool {
@@ -440,7 +445,7 @@ class Agent: Codable, @unchecked Sendable {
                         if (userResponse.accepted == true) {
                             // Need to execute original tool that requested permission (to prevent re-triggering request)
                             let toolOutput = await executeTool(tc)
-                            messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: toolOutput, toolCallId: tc.id))
+                            messages.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.clampToolOutput(toolOutput), toolCallId: tc.id))
                             
                             if (tc.name == ReadImage.name),
                                let imageMessage = await AgentUtilities.messageFromImageTC(runUUID: runUUID, toolCall: tc) {
@@ -549,7 +554,7 @@ class Agent: Codable, @unchecked Sendable {
                 switch result {
                 case .completed(let output):
                     await onEvent(.toolResult(output), runUUID)
-                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: output, toolCallId: tc.id))
+                    toolResults.append(Message(runUUID: runUUID, role: MsgSource.tool.name, text: AgentUtilities.clampToolOutput(output), toolCallId: tc.id))
                     
                     if (tc.name == ReadImage.name),
                        let imageMessage = await AgentUtilities.messageFromImageTC(runUUID: runUUID, toolCall: tc) {
@@ -581,6 +586,7 @@ class Agent: Codable, @unchecked Sendable {
             promptMessages = injectContextPrompts(promptMessages, runUUID: runUUID)
             promptMessages.append(contentsOf: newMessages)
             promptMessages = repairInterruptedToolCalls(promptMessages, runUUID: runUUID)
+            promptMessages = enforceTokenBudget(promptMessages)
             
             try Task.checkCancellation()
             
@@ -977,9 +983,10 @@ extension Agent {
 
 extension Agent {
     func autoCompactIfNeeded() async {
-        guard (thoughtWindow > 0) else { return }
         let nonSystemCount = history.filter { $0.role != MsgSource.system.name }.count
-        guard (nonSystemCount > thoughtWindow) else { return }
+        let countTripped = (thoughtWindow > 0) && (nonSystemCount > thoughtWindow)
+        let tokensTripped = AgentUtilities.estimatedTokens(history) >= Int(Double(effectiveContextWindow) * 0.70)
+        guard (countTripped || tokensTripped) else { return }
 
         let result = await compactHistory()
         print("Agent (\(uuid)) auto-compaction: \(result)")
@@ -1082,6 +1089,38 @@ extension Agent {
         saveMetadata()
 
         return "Compacted \(compactedAway.count) messages into a summary; \(recentPortion.count) recent messages kept verbatim. Originals archived."
+    }
+
+    func enforceTokenBudget(_ messages: [Message]) -> [Message] {
+        // Last-resort guard before provider call
+        // If still exceeds budget, truncate tool-result texts oldest-first (in outgoing prompt only; history untouched).
+        
+        let budget = Int(Double(effectiveContextWindow) * 0.85)
+        guard (AgentUtilities.estimatedTokens(messages) > budget) else { return messages }
+
+        var result = messages
+        for i in result.indices {
+            guard (AgentUtilities.estimatedTokens(result) > budget) else { break }
+            
+            let m = result[i]
+            guard (m.role == MsgSource.tool.name),
+                  let t = m.text,
+                  (t.count > 2_000) else { continue }
+            
+            result[i] = Message(
+                uuid: m.uuid,
+                runUUID: m.runUUID,
+                originActor: m.originActor,
+                createdAt: m.createdAt,
+                model: m.model,
+                role: m.role,
+                text: AgentUtilities.clampToolOutput(t, maxChars: 2_000),
+                toolCallId: m.toolCallId,
+                toolCalls: m.toolCalls,
+                attachments: m.attachments
+            )
+        }
+        return result
     }
 
     private func injectContextPrompts(_ messages: [Message], runUUID: String) -> [Message] {

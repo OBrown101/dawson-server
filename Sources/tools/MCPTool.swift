@@ -15,10 +15,65 @@ import System
 class MCPTool: PermissionAware {
     static let name = "mcp_tool"
     
+    private let workspace: () -> [String]
+    private let mode: () -> ModeType
+
+    init(
+        workspace: @escaping () -> [String],
+        mode: @escaping () -> ModeType
+    ) {
+        self.workspace = workspace
+        self.mode = mode
+    }
+
     func permissionRequests(args: [String : Any]) -> [PermissionRequest] {
-        return [
-            PermissionRequest(action: .all)
-        ]
+        let target = workspace().first
+
+        guard let raw = args["action"] as? String,
+              let action = MCPAction(rawValue: raw) else {
+            // Unparseable action: strictest classification.
+            return [PermissionRequest(action: .all)]
+        }
+
+        switch action {
+        case .listServers, .listTools:
+            return [PermissionRequest(action: .read, target: target)]
+
+        case .callTool:
+            let server = (args["server_name"] as? String) ?? ""
+            let tool = (args["tool_name"] as? String) ?? ""
+
+            // Config-blocked tools refused outright below Ultimate, regardless of server trust.
+            if (MCPServersConfig.shared.blockedTools(server).contains(tool)) {
+                return [PermissionRequest(
+                    action: .write,
+                    target: target,
+                    requirement: .deny,
+                    reason: "MCP tool '\(tool)' on '\(server)' is blocked by mcp-servers.json; not permitted below Ultimate mode."
+                )]
+            }
+
+            if (MCPServersConfig.shared.isTrusted(server)) {
+                // Trusted server: flows as normal write.
+                return [PermissionRequest(action: .write, target: target)]
+            } else {
+                // Untrusted: one approval per call, with server + tool named in prompt.
+                return [PermissionRequest(
+                    action: .write,
+                    target: target,
+                    requirement: .userApproval,
+                    reason: "Call MCP tool '\(tool)' on untrusted server '\(server)'"
+                )]
+            }
+
+        case .registerServer:
+            // Launches arbitrary host process, unsandboxed — not agent decision below Ultimate.
+            // Normal path (below Ultimate) uses mcp-servers.json.
+            return [PermissionRequest(
+                action: .all,
+                reason: "Registering an MCP server launches an unsandboxed host process. Add it to mcp-servers.json instead, or use Ultimate mode."
+            )]
+        }
     }
     
     enum MCPAction: String, CaseIterable {
@@ -32,7 +87,7 @@ class MCPTool: PermissionAware {
             case .listServers:
                 return "Return all connected MCP server names."
             case .listTools:
-                return "Return all tools for a specified server."
+                return "Return all tools and tool names for a specified server."
             case .callTool:
                 return "Invoke a tool on a specified server. This should match the schema expected by the target tool."
             case .registerServer:
@@ -55,165 +110,77 @@ class MCPTool: PermissionAware {
         }
     }
     
-    func openAISchema() -> [String : Any] {
+    private let toolDescription = """
+        Interact with any connected Model Context Protocol (MCP) server.
+
+        Use this tool to:
+        - List all connected MCP servers
+        - List all tools available on a specific MCP server
+        - Call a tool on a specific MCP server with arguments
+        - Register a new MCP server
+
+        This allows the agent to dynamically use capabilities provided by
+        external applications and services connected through MCP.
+        """
+    
+    private let parameterSchema: [String: Any] = [
+        "type": "object",
+        "required": ["action"],
+        "properties": [
+            "action": [
+                "type": "string",
+                "enum": [
+                    MCPAction.listServers.rawValue,
+                    MCPAction.listTools.rawValue,
+                    MCPAction.callTool.rawValue,
+                    MCPAction.registerServer.rawValue
+                ],
+                "description": """
+                The action to perform:
+                - \(MCPAction.listServers.rawValue): \(MCPAction.listServers.description)
+                - \(MCPAction.listTools.rawValue): \(MCPAction.listTools.description)
+                - \(MCPAction.callTool.rawValue): \(MCPAction.callTool.description)
+                - \(MCPAction.registerServer.rawValue): \(MCPAction.registerServer.description)
+                """
+            ],
+            "server_name": [
+                "type": "string",
+                "description": "The name of the MCP server."
+            ],
+            "tool_name": [
+                "type": "string",
+                "description": "The name of the tool to call."
+            ],
+            "arguments": [
+                "type": "object",
+                "description": "Arguments for given MCP tool call or other MCP control action.",
+                "additionalProperties": true
+            ]
+        ]
+    ]
+    
+    func openAISchema() -> [String: Any] {
         return [
             "type": "function",
             "name": MCPTool.name,
-            "description": """
-            Interact with any connected Model Context Protocol (MCP) server.
-
-            Use this tool to:
-            - List all connected MCP servers
-            - List all tools available on a specific MCP server
-            - Call a tool on a specific MCP server with arguments
-            - Register a new MCP server
-
-            This allows the agent to dynamically use capabilities provided by
-            external applications and services connected through MCP.
-            """,
-            "parameters": [
-                "type": "object",
-                "required": ["action"],
-                "properties": [
-                    "action": [
-                        "type": "string",
-                        "enum": [
-                            MCPAction.listServers.rawValue,
-                            MCPAction.listTools.rawValue,
-                            MCPAction.callTool.rawValue,
-                            MCPAction.registerServer.rawValue
-                        ],
-                        "description": """
-                        The action to perform:
-                        - \(MCPAction.listServers.rawValue): \(MCPAction.listServers.description)
-                        - \(MCPAction.listTools.rawValue): \(MCPAction.listTools.description)
-                        - \(MCPAction.callTool.rawValue): \(MCPAction.callTool.description)
-                        - \(MCPAction.registerServer.rawValue): \(MCPAction.registerServer.description)
-                        """
-                    ],
-                    "server_name": [
-                        "type": "string",
-                        "description": "The name of the MCP server."
-                    ],
-                    "tool_name": [
-                        "type": "string",
-                        "description": "The name of the tool to call."
-                    ],
-                    "arguments": [
-                        "type": "object",
-                        "description": "Arguments for given MCP tool call or other MCP control action.",
-                        "additionalProperties": true
-                    ]
-                ]
-            ]
+            "description": toolDescription,
+            "parameters": parameterSchema
         ]
     }
-    
-    func anthropicSchema() -> [String : Any] {
+    func anthropicSchema() -> [String: Any] {
         return [
             "name": MCPTool.name,
-            "description": """
-            Interact with any connected Model Context Protocol (MCP) server.
-
-            Use this tool to:
-            - List all connected MCP servers
-            - List all tools available on a specific MCP server
-            - Call a tool on a specific MCP server with arguments
-            - Register a new MCP server
-
-            This allows the agent to dynamically use capabilities provided by
-            external applications and services connected through MCP.
-            """,
-            "input_schema": [
-                "type": "object",
-                "required": ["action"],
-                "properties": [
-                    "action": [
-                        "type": "string",
-                        "enum": [
-                            MCPAction.listServers.rawValue,
-                            MCPAction.listTools.rawValue,
-                            MCPAction.callTool.rawValue,
-                            MCPAction.registerServer.rawValue
-                        ],
-                        "description": """
-                        The action to perform:
-                        - \(MCPAction.listServers.rawValue): \(MCPAction.listServers.description)
-                        - \(MCPAction.listTools.rawValue): \(MCPAction.listTools.description)
-                        - \(MCPAction.callTool.rawValue): \(MCPAction.callTool.description)
-                        - \(MCPAction.registerServer.rawValue): \(MCPAction.registerServer.description)
-                        """
-                    ],
-                    "server_name": [
-                        "type": "string",
-                        "description": "The name of the MCP server."
-                    ],
-                    "tool_name": [
-                        "type": "string",
-                        "description": "The name of the tool to call."
-                    ],
-                    "arguments": [
-                        "type": "object",
-                        "description": "Arguments for given MCP tool call or other MCP control action.",
-                        "additionalProperties": true
-                    ]
-                ]
-            ]
+            "description": toolDescription,
+            "input_schema": parameterSchema
         ]
     }
-    
     func ollamaSchema() -> [String: Any] {
         return [
             "type": "function",
             "function": [
                 "name": MCPTool.name,
-                "description": """
-                Interact with any connected Model Context Protocol (MCP) server.
-
-                Use this tool to:
-                - List all connected MCP servers
-                - List all tools available on a specific MCP server
-                - Call a tool on a specific MCP server with arguments
-                - Register a new MCP server
-
-                This allows the agent to dynamically use capabilities provided by
-                external applications and services connected through MCP.
-                """,
-                "parameters": [
-                    "type": "object",
-                    "required": ["action"],
-                    "properties": [
-                        "action": [
-                            "type": "string",
-                            "enum": [
-                                "\(MCPAction.listServers)",
-                                "\(MCPAction.listTools)",
-                                "\(MCPAction.callTool)",
-                                "\(MCPAction.registerServer)"
-                            ],
-                            "description": """
-                            The action to perform:
-                            - \(MCPAction.listServers): \(MCPAction.listServers.description)
-                            - \(MCPAction.listTools): \(MCPAction.listTools.description)
-                            - \(MCPAction.callTool): \(MCPAction.callTool.description)
-                            - \(MCPAction.registerServer): \(MCPAction.registerServer.description)
-                            """
-                        ],
-                        "server_name": [
-                            "type": "string",
-                            "description": "The name of the MCP server."
-                        ],
-                        "tool_name": [
-                            "type": "string",
-                            "description": "The name of the tool to call."
-                        ],
-                        "arguments": [
-                            "type": "object",
-                            "description": "Arguments for given MCP tool call or other MCP control action.",
-                            "additionalProperties": true
-                        ]
-                    ]
-                ]
+                "description": toolDescription,
+                "parameters": parameterSchema
             ]
         ]
     }
@@ -254,14 +221,33 @@ class MCPTool: PermissionAware {
               (!serverName.isEmpty) else {
             return "Error: 'server_name' is required for action '\(MCPAction.listTools)'."
         }
-        
+
         do {
-            let toolNames = try await MCPHandler.shared.listToolNames(serverName: serverName)
-            if (toolNames.isEmpty) {
+            var tools = try await MCPHandler.shared.getAllTools(serverName: serverName)
+            if (tools.isEmpty) {
                 return "No tools are available on MCP server '\(serverName)'."
             }
+            // Optional filter: full schema for one tool.
+            if let toolName = args["tool_name"] as? String, (!toolName.isEmpty) {
+                tools = tools.filter { $0.name == toolName }
+                if (tools.isEmpty) {
+                    return "No tool named '\(toolName)' on server '\(serverName)'."
+                }
+            }
 
-            return toolNames.joined(separator: "\n")
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            var parts: [String] = []
+            for tool in tools.sorted(by: { $0.name < $1.name }) {
+                var block = tool.name
+                if let d = tool.description { block += "\n  \(d)" }
+                if let data = try? encoder.encode(tool.inputSchema),
+                   let schema = String(data: data, encoding: .utf8) {
+                    block += "\n  schema: \(schema)"
+                }
+                parts.append(block)
+            }
+            return parts.joined(separator: "\n\n")
         } catch {
             return "Error: \(error.localizedDescription)"
         }
@@ -279,6 +265,12 @@ class MCPTool: PermissionAware {
         }
 
         let toolArguments = args["arguments"] as? [String: Any] ?? [:]
+
+        // Re-check blocklist at execute time (defense in depth).
+        if (mode() != .ultimate),
+           MCPServersConfig.shared.blockedTools(serverName).contains(toolName) {
+            return "MCP tool '\(toolName)' on '\(serverName)' is blocked by mcp-servers.json and is not permitted below Ultimate mode."
+        }
 
         do {
             let content = try await MCPHandler.shared.callTool(

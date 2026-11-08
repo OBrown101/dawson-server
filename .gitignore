@@ -41,6 +41,7 @@ config.properties
 CLAUDE.md
 DAWSON.md
 TODOS.md
+python-installed-packages.txt
 
 # MemPalace specific
 mempalace.yaml

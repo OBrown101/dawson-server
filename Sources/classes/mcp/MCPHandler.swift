@@ -117,11 +117,20 @@ final class MCPHandler: @unchecked Sendable {
         do {
             let result = try await server.client.callTool(
                 name: toolName,
-                arguments: arguments as? [String : Value]
+                arguments: MCPHandler.toValueDict(arguments)
             )
-            return (result.isError ?? false) ? [] : result.content
+            if (result.isError ?? false) {
+                // Surface tool errors instead of masking them as empty success.
+                let message = convToString(result.content)
+                throw MCPHandlerError.underlying(NSError(
+                    domain: "MCPToolError", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey:
+                        message.isEmpty ? "Tool '\(toolName)' reported an error with no message." : message]
+                ))
+            }
+            return result.content
         } catch {
-            throw MCPHandlerError.underlying(error)
+            throw (error as? MCPHandlerError) ?? MCPHandlerError.underlying(error)
         }
     }
 }
@@ -177,5 +186,31 @@ extension MCPHandler {
         }
 
         return parts.joined(separator: "\n\n")
+    }
+    
+    static func toValueDict(_ dict: [String: Any]) -> [String: Value] {
+        var out: [String: Value] = [:]
+        for (k, v) in dict {
+            guard let value = toValue(v) else { continue }
+            out[k] = value
+        }
+        return out
+    }
+    
+    private static func toValue(_ any: Any) -> Value? {
+        switch any {
+        case let v as Value: return v
+        case let n as NSNumber:
+            if (CFGetTypeID(n) == CFBooleanGetTypeID()) {
+                return .bool(n.boolValue)   // a real JSON true/false
+            }
+            let t = String(cString: n.objCType)
+            return ("cislqCISLQB".contains(t)) ? .int(n.intValue) : .double(n.doubleValue)
+        case let s as String: return .string(s)
+        case let a as [Any]: return .array(a.compactMap { toValue($0) })
+        case let o as [String: Any]: return .object(toValueDict(o))
+        case is NSNull: return .null
+        default: return nil
+        }
     }
 }

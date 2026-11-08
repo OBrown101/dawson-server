@@ -28,6 +28,8 @@ defer {
 print("DAWSON started...")
 let _ = ServerSettings.shared
 
+await MCPServersConfig.shared.registerConfigured()
+
 app.http.server.configuration.hostname = "0.0.0.0"
 app.http.server.configuration.port = 8443
 app.http.server.configuration.tlsConfiguration = .makeServerConfiguration(
