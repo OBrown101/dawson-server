@@ -16,6 +16,8 @@ final class ReadPDF: PermissionAware {
     let description = """
     Reads text from a PDF file at an exact path. The path must be an absolute path or a valid path relative to the current working directory. Use find_file first if the PDF location is unknown. Supports optional 1-based page ranges.
     """
+    
+    var timeout: TimeInterval = 120 // PDF parsing of large documents can be slow
 
     func permissionRequests(args: [String: Any]) -> [PermissionRequest] {
         guard let path = args["path"] as? String,
@@ -79,8 +81,13 @@ final class ReadPDF: PermissionAware {
         guard let path = args["path"] as? String,
               (!path.isEmpty) else { return "Error: No path provided." }
 
-        var pythonArgs: [String: Any] = ["path": path]
+        let pdfURL = URL(fileURLWithPath: path).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: pdfURL.path) else {
+            return "Error: PDF not found at '\(pdfURL.path)'. Use find_file to locate it, then pass the returned absolute path."
+        }
 
+        var pythonArgs: [String: Any] = ["path": pdfURL.path]
+        
         for key in [
             "start_page",
             "end_page",
@@ -102,14 +109,62 @@ final class ReadPDF: PermissionAware {
             }
         }
 
+        // Scratch dir doubles as sandbox's required writable directory.
+        let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("dawson-pdf-\(UUID().uuidString)")
         do {
-            let result = try PythonHandler.shared.callString(
-                moduleName: "pdf_reader",
-                functionName: "read_pdf",
-                args: pythonArgs
-            )
+            try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        } catch {
+            return "Error: Could not create scratch directory: \(error.localizedDescription)"
+        }
+        defer { try? FileManager.default.removeItem(at: scratch) }
 
-            return result
+        var spec = SandboxSpec(writableDirectories: [scratch.path])
+        spec.readOnlyDirectories = [
+            DAWSON.root.appendingPathComponent("python-scripts").path,
+            pdfURL.deletingLastPathComponent().path
+        ]
+        spec.timeout = timeout
+
+        let payloadData: Data
+        do {
+            payloadData = try JSONSerialization.data(withJSONObject: [
+                "module": "pdf_reader",
+                "function": "read_pdf",
+                "args": ["args": pythonArgs]
+            ])
+        } catch {
+            return "Error reading PDF: could not encode arguments: \(error)"
+        }
+        let sendableSpec = spec
+
+        // runSandboxed blocks on subprocess; hop off the cooperative pool.
+        do {
+            let result = try await Task.detached(priority: .userInitiated) {
+                try PythonHandler.shared.runSandboxed(
+                    payload: payloadData,
+                    spec: sendableSpec
+                )
+            }.value
+
+            if (result.timedOut) {
+                return "Error: PDF parsing timed out after \(Int(timeout))s. Try a narrower page range."
+            }
+
+            // Bootstrap prints exactly one JSON object as the last stdout line.
+            if let line = result.stdout
+                .split(separator: "\n", omittingEmptySubsequences: true)
+                .last,
+               let data = line.data(using: .utf8),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+
+                if obj["ok"] as? Bool == true {
+                    return obj["result"].map { String(describing: $0) } ?? "None"
+                }
+                let err = obj["error"] as? String ?? "unknown Python error"
+                return "Error reading PDF:\n\(err)"
+            }
+
+            return "Error reading PDF: parser exited with code \(result.exitCode). stderr: \(result.stderr.isEmpty ? "(empty)" : result.stderr)"
         } catch {
             return "Error reading PDF: \(error)"
         }
