@@ -82,14 +82,14 @@ class Agent: Codable, @unchecked Sendable {
             WriteFile(), ReplaceInFile(),
             Speak(), RichFormatter(),
             InstallPythonPackage(), ListPythonTools(),
-            PromotePythonTool(workspace: { self.directories }),
-            RunPythonScript(workspace: { self.directories }),
-            RunPythonCode(workspace: { self.directories }),
-            RunCommand(workspace: { self.directories }, mode: { self.mode }),
+            PromotePythonTool(workspace: { self.effectiveDirectories }),
+            RunPythonScript(workspace: { self.effectiveDirectories }),
+            RunPythonCode(workspace: { self.effectiveDirectories }),
+            RunCommand(workspace: { self.effectiveDirectories }, mode: { self.effectiveMode }),
             SearchWeb(), FetchURL(),
             ListAgents(), TalkToAgent(), DelegateTask(), ReleaseWorker(),
             CreateChat(), UpdateAgent(),
-            MCPTool(workspace: { self.directories }, mode: { self.mode })
+            MCPTool(workspace: { self.effectiveDirectories }, mode: { self.effectiveMode })
         ]
     }
     private static var requiredTools: [Tool] {

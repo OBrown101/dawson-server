@@ -16,6 +16,7 @@ struct SandboxSpec: Sendable {
     var executableDirectories: [String] = [] // Read + exec directories beyond the platform baseline (e.g. host developer toolchain).
     var scratchPath: String? = nil          // Agent persistent scratch pad (writable, added to PYTHONPATH, exposed to script as os.environ["DAWSON_SCRATCH"]).
     var allowNetwork: Bool = false          // Outbound network access. Default: none.
+    var allowLoopback: Bool = false         // Localhost TCP for build-tool IPC (macOS; Linux has a private lo regardless). Warrior+ only — set by RunCommand.
     var timeout: TimeInterval = 60          // Wall-clock limit (process killed when expires)
     var memoryLimitMB: Int = 2048           // RLIMIT_AS address-space cap (enforced Linux, best-effort macOS)
 }

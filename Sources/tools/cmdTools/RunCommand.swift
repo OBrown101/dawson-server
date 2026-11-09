@@ -18,17 +18,31 @@ class RunCommand: PermissionAware {
     private let workspace: () -> [String]
     private let mode: () -> ModeType
     private let userAllowedCmds: () -> Set<String>
+    
+    // TODO: CONNECT TO PER-CHAT SWITCH (UI + AGENT METADATA) SO LOOPBACK BE USER ENABLED/DISABLED.
+    // DEFAULT ON UNTIL THEN. NEVER HONORED BELOW WARRIOR — SEE loopbackPermitted(for:).
+    private let loopbackEnabled: () -> Bool
 
-    private var timeout: TimeInterval = 120
+    var defaultTimeout: TimeInterval = 120
+    var maxTimeout: TimeInterval = 800  // Cold Gradle/Xcode builds routinely exceed several minutes
 
     init(
         workspace: @escaping () -> [String],
         mode: @escaping () -> ModeType,
-        userAllowedCmds: @escaping () -> Set<String> = { [] }
+        userAllowedCmds: @escaping () -> Set<String> = { [] },
+        loopbackEnabled: @escaping () -> Bool = { true }
     ) {
         self.workspace = workspace
         self.mode = mode
         self.userAllowedCmds = userAllowedCmds
+        self.loopbackEnabled = loopbackEnabled
+    }
+
+    private func loopbackPermitted(for mode: ModeType) -> Bool {
+        // Loopback reaches host services (macOS has no network namespaces), so
+        // Warrior-and-above capability only (switch or not).
+        guard (mode.rank >= ModeType.warrior.rank) else { return false }
+        return loopbackEnabled()
     }
 
     func permissionRequests(args: [String: Any]) -> [PermissionRequest] {
@@ -85,7 +99,7 @@ class RunCommand: PermissionAware {
         tools.
         """
 
-    private let parameterSchema: [String: Any] = [
+    private var parameterSchema: [String: Any] { [
         "type": "object",
         "required": ["command"],
         "properties": [
@@ -96,9 +110,13 @@ class RunCommand: PermissionAware {
             "working_directory": [
                 "type": "string",
                 "description": "Directory to run in; must be within the workspace. Defaults to the first workspace directory."
+            ],
+            "timeout_seconds": [
+                "type": "integer",
+                "description": "Optional wall-clock limit in seconds (default \(Int(defaultTimeout)), max \(Int(maxTimeout))). Builds often need more; the process is killed when exceeded."
             ]
         ]
-    ]
+    ] }
 
     func openAISchema() -> [String: Any] {
         return [
@@ -131,6 +149,17 @@ class RunCommand: PermissionAware {
               !command.isEmpty else {
             return "Error: Missing required parameter 'command'."
         }
+        
+        // JSON numbers may decode as Int or Double depending on the provider.
+        let requestedTimeout: TimeInterval
+        if let t = args["timeout_seconds"] as? Double {
+            requestedTimeout = t
+        } else if let t = args["timeout_seconds"] as? Int {
+            requestedTimeout = TimeInterval(t)
+        } else {
+            requestedTimeout = defaultTimeout
+        }
+        let timeout = min(max(requestedTimeout, 1), maxTimeout)
 
         let workspaces = workspace()
         guard let primary = workspaces.first else {
@@ -165,7 +194,6 @@ class RunCommand: PermissionAware {
             let result: HostProcessResult
             if (mode == .ultimate) {
                 // Unsandboxed host execution.
-                let timeout = self.timeout
                 result = try await Task.detached(priority: .userInitiated) {
                     try HostProcess.run(
                         executable: "/bin/sh",
@@ -179,6 +207,7 @@ class RunCommand: PermissionAware {
                 // workspace writable, network denied.
                 var spec = SandboxSpec(writableDirectories: workspaces)
                 spec.allowNetwork = false
+                spec.allowLoopback = loopbackPermitted(for: mode)
                 spec.executableDirectories = DeveloperTools.hostToolchainPaths
                 spec.timeout = timeout
 
@@ -198,7 +227,15 @@ class RunCommand: PermissionAware {
             }
 
             if (result.timedOut) {
-                return "Command timed out after \(Int(timeout))s and was killed."
+                // Surface partial output so a hang is distinguishable from slowness.
+                let out = truncate(result.stdout, limit: 6_000)
+                let err = truncate(result.stderr, limit: 4_000)
+                return """
+                Command timed out after \(Int(timeout))s and was killed. If the work \
+                legitimately needs longer, retry with a higher timeout_seconds (max \(Int(maxTimeout))).
+                stdout before kill: \(out.isEmpty ? "(empty)" : out)
+                stderr before kill: \(err.isEmpty ? "(empty)" : err)
+                """
             }
 
             let out = truncate(result.stdout, limit: 10_000)

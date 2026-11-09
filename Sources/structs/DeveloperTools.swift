@@ -39,6 +39,42 @@ struct DeveloperTools {
         #endif
     }()
     
+    static let hostAndroidSDK: String? = {
+        // Android SDK (read-only is enough for AGP builds). Standard install
+        // locations; honor ANDROID_HOME if the server was launched with one.
+        let fm = FileManager.default
+        var candidates: [String] = []
+        if let env = ProcessInfo.processInfo.environment["ANDROID_HOME"], (!env.isEmpty) {
+            candidates.append(env)
+        }
+        #if os(macOS)
+        candidates.append(NSHomeDirectory() + "/Library/Android/sdk")
+        #else
+        candidates.append(NSHomeDirectory() + "/Android/Sdk")
+        #endif
+        for candidate in candidates {
+            var isDir: ObjCBool = false
+            if fm.fileExists(atPath: candidate + "/platforms", isDirectory: &isDir), isDir.boolValue {
+                return FileUtilities.canonicalFilePath(candidate)
+            }
+        }
+        return nil
+    }()
+    
+    private static let jdkRoots: [String] = {
+        // Where macOS JDKs install. Gradle's toolchain detection scans these and
+        // probes JDKs via their (often symlinked) paths here, so grant the
+        // directories as-is, not only the canonical java_home. Kept out of
+        // vendorRoots so JDK bins don't land on the sandbox PATH.
+        #if os(macOS)
+        return ["/Library/Java/JavaVirtualMachines",
+                NSHomeDirectory() + "/Library/Java/JavaVirtualMachines"]
+            .filter { FileManager.default.fileExists(atPath: $0) }
+        #else
+        return []
+        #endif
+    }()
+    
     static let hostToolchainPaths: [String] = {
         // Directories containing host dev toolchain, suitable for
         // read+exec grants in sandbox (SandboxSpec.executableDirectories).
@@ -54,7 +90,7 @@ struct DeveloperTools {
         //   by the sandbox, so nothing extra is granted.
 
         #if os(macOS)
-        let java = hostJavaHome.map { [$0] } ?? []
+        let java = (hostJavaHome.map { [$0] } ?? []) + jdkRoots
         if FileManager.default.fileExists(atPath: cltPath + "/usr/bin/git") {
             return [cltPath] + java + vendorRoots
         }
@@ -93,7 +129,8 @@ struct DeveloperTools {
         #if os(macOS)
         // Deliberately NOT /opt/homebrew wholesale — grant specific brew kegs
         // case-by-case here if needed (e.g. "/opt/homebrew/opt/cmake").
-        var candidates = ["/Applications/microchip"]
+        var candidates = ["/Applications/microchip", "/Applications/SEGGER"]
+        if let sdk = hostAndroidSDK { candidates.append(sdk) }
         // Versioned vendor folders (e.g. "SEGGER Embedded Studio for ARM 8.22a").
         if let apps = try? fm.contentsOfDirectory(atPath: "/Applications") {
             candidates += apps
@@ -102,6 +139,7 @@ struct DeveloperTools {
         }
         #else
         var candidates = ["/opt/microchip"]
+        if let sdk = hostAndroidSDK { candidates.append(sdk) }
         if let opt = try? fm.contentsOfDirectory(atPath: "/opt") {
             candidates += opt
                 .filter { $0.lowercased().contains("segger") }
@@ -167,6 +205,13 @@ struct DeveloperTools {
             env["JAVA_HOME"] = javaHome
         }
         #endif
+        
+        if let sdk = hostAndroidSDK {
+            // AGP resolves the SDK via ANDROID_HOME when local.properties is
+            // absent/unreadable (it is: HOME is the per-run temp).
+            env["ANDROID_HOME"] = sdk
+            env["ANDROID_SDK_ROOT"] = sdk
+        }
         return env
     }()
 }

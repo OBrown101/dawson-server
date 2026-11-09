@@ -71,7 +71,8 @@ final class PythonSandbox {
             writable: writable + [runTemp.path],
             readOnly: readOnly,
             executable: executable,
-            allowNetwork: spec.allowNetwork
+            allowNetwork: spec.allowNetwork,
+            allowLoopback: spec.allowLoopback
         )
         #elseif os(Linux)
         let prepared = try makeLinuxProcess(
@@ -155,6 +156,7 @@ final class PythonSandbox {
             env["GRADLE_USER_HOME"] = first + "/.gradle"
         }
         env["GRADLE_OPTS"] = "-Dorg.gradle.daemon=false"
+        env["JAVA_TOOL_OPTIONS"] = "-Djava.net.preferIPv4Stack=true"   // Seatbelt's "localhost" doesn't match IPv4-mapped addresses
         
         env.merge(DeveloperTools.hostToolchainEnvironment) { _, pinned in pinned }
         
@@ -185,7 +187,8 @@ extension PythonSandbox {
         writable: [String],
         readOnly: [String],
         executable: [String],
-        allowNetwork: Bool
+        allowNetwork: Bool,
+        allowLoopback: Bool
     ) -> String {
         let writableRules = writable
             .map { "(allow file-read* file-write* (subpath \"\(sbEscape($0))\"))" }
@@ -201,9 +204,47 @@ extension PythonSandbox {
         let executableRules = executable
             .map { "(subpath \"\(sbEscape($0))\")" }
             .joined(separator: "\n")
-        let networkRule = allowNetwork ? "(allow network*)\n(allow system-socket)" : "; network denied by default"
+        
+        // Network tiers (most to least permissive):
+        //  - allowNetwork:  full network.
+        //  - allowLoopback: localhost TCP+UDP for build-tool IPC (Gradle/Kotlin
+        //    daemons, test runners). macOS has no network namespaces, so this
+        //    reaches EVERY host loopback service — the denies below fence off
+        //    known unauthenticated ones (adb, debug probes, Chrome DevTools,
+        //    Ollama, MySQL). Seatbelt is last-match-wins, so they must follow
+        //    the allows. Dev servers / agent-to-agent traffic are NOT fenced.
+        //  - neither:       loopback UDP only (Gradle's file-lock handler).
+        let networkRule: String
+        if (allowNetwork) {
+            networkRule = "(allow network*)\n(allow system-socket)"
+        } else if (allowLoopback) {
+            // HAZARD: Gradle binds/listens on wildcard, so inbound is "*:*": agent-run servers can accept LAN connections.
+            // Outbound stays loopback-only + port denies; the agent can't initiate off-machine traffic.
+            // Mitigation: enable macOS Firewall ("Block all incoming connections").
+            networkRule = """
+              (allow network-bind (local ip "*:*"))
+              (allow network-inbound (local ip "*:*"))
+              (allow network-outbound (remote ip "localhost:*"))
+              (deny network-outbound
+                (remote tcp "localhost:5037")
+                (remote tcp "localhost:2331")
+                (remote tcp "localhost:3333")
+                (remote tcp "localhost:4444")
+                (remote tcp "localhost:9222")
+                (remote tcp "localhost:11434")
+                (remote tcp "localhost:3306")
+                (remote tcp "localhost:1455")
+                (remote tcp "localhost:8443"))   ; dawson-server + OpenAI OAuth callback — keep in sync
+              """
+        } else {
+            networkRule = """
+              (allow network-bind (local udp "localhost:*"))
+              (allow network-inbound (local udp "localhost:*"))
+              (allow network-outbound (remote udp "localhost:*"))
+              """
+        }
 
-        return #"""
+        return """
         (version 1)
         (deny default)
 
@@ -232,9 +273,11 @@ extension PythonSandbox {
           (literal "/dev/zero")
           (literal "/dev/random")
           (literal "/dev/urandom")
+          (subpath "/dev/fd")
           \(executableRules))
         (allow file-write-data
-          (literal "/dev/null"))
+          (literal "/dev/null")
+          (subpath "/dev/fd"))
         (allow sysctl-read)
         ; Named services only — a blanket mach-lookup is the classic Seatbelt
         ; escape surface once arbitrary native code runs. This set covers what
@@ -242,7 +285,7 @@ extension PythonSandbox {
         ; Gradle's file watching) actually need. If a toolchain breaks, find
         ; the missing service with:  log stream --predicate 'sender == "Sandbox"'
         (allow mach-lookup
-          (global-name-regex #"^com\.apple\.system\.")
+          (global-name-regex #"^com\\.apple\\.system\\.")
           (global-name "com.apple.SecurityServer")
           (global-name "com.apple.trustd")
           (global-name "com.apple.trustd.agent")
@@ -259,7 +302,7 @@ extension PythonSandbox {
 
         ; --- network ---
         \(networkRule)
-        """#
+        """
     }
 
     private static func makeMacProcess(
@@ -268,7 +311,8 @@ extension PythonSandbox {
         writable: [String],
         readOnly: [String],
         executable: [String],
-        allowNetwork: Bool
+        allowNetwork: Bool,
+        allowLoopback: Bool
     ) throws -> Prepared {
         let sandboxExec = "/usr/bin/sandbox-exec"
         guard FileManager.default.isExecutableFile(atPath: sandboxExec) else {
@@ -280,7 +324,8 @@ extension PythonSandbox {
             writable: writable,
             readOnly: readOnly,
             executable: executable,
-            allowNetwork: allowNetwork
+            allowNetwork: allowNetwork,
+            allowLoopback: allowLoopback
         )
 
         let profileURL = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -341,6 +386,9 @@ extension PythonSandbox {
             // minimal explicit dict) is exactly what bwrap inherits and passes on.
         ]
         if !allowNetwork {
+            // Private network namespace: bwrap brings up its own `lo`, so
+            // loopback IPC works with zero reach into host services.
+            // SandboxSpec.allowLoopback is therefore a no-op here.
             args += ["--unshare-net"]
         }
 
