@@ -10,8 +10,14 @@
 
 import Foundation
 
-class SearchWeb: PermissionAware {
+class SearchWeb: PermissionAware, ChatAware {
     static let name = "search_web"
+
+    private var chat: Chat?
+
+    func setChat(_ chat: Chat?) {
+        self.chat = chat
+    }
 
     func permissionRequests(args: [String: Any]) -> [PermissionRequest] {
         guard let query = (args["query"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -92,6 +98,13 @@ class SearchWeb: PermissionAware {
             let results = try await WebContent.search(query: query, count: count)
             if results.isEmpty {
                 return "No results found for '\(query)'."
+            }
+
+            // Result URLs gain provenance: Warrior mode may auto-allow fetching them.
+            if let agentUUID = chat?.agentUUID {
+                for r in results {
+                    WebProvenance.shared.record(r.url, agentUUID: agentUUID)
+                }
             }
 
             let body = results.enumerated().map { index, r in

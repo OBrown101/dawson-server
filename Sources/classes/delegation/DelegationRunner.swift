@@ -20,8 +20,8 @@ final class DelegationRunner {
     // BUSY DETECTION: a run that produced no new messages (target agent
     // already running, or provider failure) is reported as such — never stale message.
     
-    // ATTRIBUTION: Dawson-injected prompts carry originActor metadata plus a
-    // visible [Message from Dawson] prefix.
+    // ATTRIBUTION: parent-injected prompts carry originActor metadata plus a
+    // visible [Message from <parent>] prefix.
     
 
     private init() {}

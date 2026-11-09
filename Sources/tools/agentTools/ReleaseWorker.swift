@@ -172,14 +172,14 @@ class ReleaseWorker: ChatAware, DelegationBubbleAware {
             userUUID: parent.userUUID,
             type: .confirmation,
             prompt: """
-            Dawson requests to hand his worker '\(targetChat.title)' over to you \
+            \(parent.name) requests to hand worker '\(targetChat.title)' over to you \
             as a chat you own and prompt directly.\((reason.isEmpty) ? "" : "\n\nReason: \(reason)")
 
             It will be frozen at its current effective capabilities:
             Mode: \(frozenMode)
             Workspace: \(frozenDirectories.isEmpty ? "(none)" : frozenDirectories.joined(separator: ", "))
 
-            After the handoff its mode no longer follows Dawson's — changing it \
+            After the handoff its mode no longer follows \(parent.name)'s — changing it \
             is up to you.
             """,
             toolCallName: ReleaseWorker.name

@@ -10,16 +10,22 @@
 
 import Foundation
 
-class FetchURL: PermissionAware {
+class FetchURL: PermissionAware, ChatAware {
     static let name = "fetch_url"
-    
+
+    private var chat: Chat?
+
+    func setChat(_ chat: Chat?) {
+        self.chat = chat
+    }
+
     func permissionRequests(args: [String: Any]) -> [PermissionRequest] {
         guard let urlString = (args["url"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
               (!urlString.isEmpty) else {
             return [PermissionRequest(action: .web, requirement: .deny, reason: "Error: Missing required parameter 'url'.")]
         }
         
-        return [PermissionRequest(action: .web, reason: "Allow fetching data at URL: \(urlString)")]
+        return [PermissionRequest(action: .web, target: urlString, reason: "Allow fetching data at URL: \(urlString)")]
     }
     
     private let toolDescription = """
@@ -81,6 +87,11 @@ class FetchURL: PermissionAware {
             let text = try await WebContent.fetchAndStrip(urlString: urlString, maxChars: maxChars)
             if text.isEmpty {
                 return "The page at \(urlString) contained no readable text."
+            }
+            // An allowed fetch vouches for itself and for links visible in its text.
+            if let agentUUID = chat?.agentUUID {
+                WebProvenance.shared.record(urlString, agentUUID: agentUUID)
+                WebProvenance.shared.recordURLs(in: text, agentUUID: agentUUID)
             }
             return WebContent.wrapUntrusted(text, source: urlString)
         } catch {

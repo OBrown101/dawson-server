@@ -26,7 +26,8 @@ final class CommandClassifier {
     static let writeExecutables: Set<String> = [
         "sed", "swift", "swiftc", "node", "npm", "npx", "python3",
         "cargo", "rustc", "make", "cmake", "go", "javac", "java",
-        "kotlin", "gradle", "tar", "zip", "unzip", "cp", "mv", "mkdir", "touch"
+        "kotlin", "gradle", "gradlew", "xcodebuild", "pio", "west",
+        "arduino-cli", "ninja", "tar", "zip", "unzip", "cp", "mv", "mkdir", "touch"
     ]
     
     // Bad-intent signals: refused below Ultimate (even sandboxed).

@@ -180,14 +180,15 @@ class CreateChat: ChatAware, DelegationBubbleAware {
             userUUID: parent.userUUID,
             type: .confirmation,
             prompt: """
-            Dawson requests to create a new chat for you: '\(title)'.
+            \(parent.name) requests to create a new chat for you: '\(title)'.
 
             Mode: \(chatMode)
             Workspace: \(requestedDirs.isEmpty ? "(none)" : requestedDirs.joined(separator: ", "))
-            Seeded context: \((brief == nil) ? "none" : "yes (attributed to Dawson in the transcript)")
+            Seeded context: \((brief == nil) ? "none" : "yes (attributed to \(parent.name) in the transcript)")
 
-            Unlike his workers, this chat is YOURS: you prompt it directly, and \
-            its mode stays as granted even if Dawson's mode later changes.
+            Unlike \(parent.name)'s workers, this chat is YOURS: you prompt it \
+            directly, and its mode stays as granted even if \(parent.name)'s mode \
+            later changes.
             """,
             toolCallName: CreateChat.name
         )
@@ -237,8 +238,8 @@ class CreateChat: ChatAware, DelegationBubbleAware {
         }
 
         // Seed the opening context through the normal delegation path so
-        // originActor attribution holds ("⚔ Dawson (acting)").
-        let message = "[Message from Dawson]\n\n" + brief
+        // originActor attribution holds.
+        let message = "[Message from \(parent.name)]\n\n" + brief
         let step = await DelegationRunner.begin(
             chat: newChat,
             childAgentUUID: agentUUID,

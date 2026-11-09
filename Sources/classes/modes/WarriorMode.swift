@@ -30,13 +30,31 @@ class WarriorMode: Mode {
             case .install:
                 evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: request.reason ?? "Installing a package, software, etc. permanently alters the shared Python environment and requires your approval.")))
             case .web:
-//                evaluations.append(PermissionEvaluation(request: request, decision: .allowed))    // UNCOMMENT ONCE TESTED AND SAFE
-                evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: request.reason ?? "Web access requires your approval in Warrior mode.")))
+                evaluations.append(evaluateWeb(request, agent: agent))
             case .harness:
                 evaluations.append(PermissionEvaluation(request: request, decision: .requiresApproval(reason: request.reason ?? "Modifying the harness affects all future agents and requires your approval.")))
             }
         }
         return evaluations
+    }
+    
+    static func evaluateWeb(_ request: PermissionRequest, agent: Agent) -> PermissionEvaluation {
+        if (request.requirement == .deny) {
+            return PermissionEvaluation(request: request, decision: .denied(reason: request.reason ?? "Permission denied: Web request refused."))
+
+        }
+        
+        guard let urlString = request.target else {
+            // No target URL means a search: queries only reach search provider (SafeSearch forced), never third-party sites.
+            return PermissionEvaluation(request: request, decision: .allowed)
+        }
+        // Fetches provenance-gated: exact URL (fragment ignored) must appeared in chat:
+        // search result, user message, or previously allowed fetch. Never matched on domain alone.
+        if (WebProvenance.shared.contains(urlString, agentUUID: agent.uuid)) {
+            return PermissionEvaluation(request: request, decision: .allowed)
+        } else {
+            return PermissionEvaluation(request: request, decision: .requiresApproval(reason: "Fetch \(urlString): this URL has no provenance in this chat (it did not appear in a search result, a user message, or a previously fetched page)."))
+        }
     }
     
     static func evaluateReadWrite(_ request: PermissionRequest, agent: Agent) -> PermissionEvaluation {
@@ -63,8 +81,7 @@ class WarriorMode: Mode {
         case .install:
             return "Installing packages, software, etc. permanently changes the shared Python environment, so each install requires your approval in Warrior mode."
         case .web:
-//            return "Web access is permitted in Warrior mode." // UNCOMMENT ONCE TESTED AND SAFE
-            return "Each web access requires your approval in Warrior mode."
+            return "Web searches are permitted freely (queries reach only the search provider, SafeSearch forced). Fetches are permitted only for exact URLs that already appeared in this chat — a search result, a user message, or a previously fetched page; any other URL requires approval."
         case .harness:
             return "Changes to the harness affect all future agents, so each requires your approval in Warrior mode."
         }

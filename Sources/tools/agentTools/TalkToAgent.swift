@@ -50,15 +50,15 @@ class TalkToAgent: ChatAware, DelegationBubbleAware {
     }
 
     private let toolDescription = """
-        Sends a message to an existing Squirebot chat and waits for its reply. \
-        Works on your own workers (from \(DelegateTask.name) and on the user's own \
-        Squirebot chats — in the latter, you speak with the user's authority in \
-        that chat, and messaging one that currently outranks your mode first \
-        requires the user's approval (raised automatically). The Squirebot \
-        retains its full history; use this for revisions, follow-up questions, \
-        answering a worker's earlier question, or relaying instructions the \
-        user gave you for a specific chat. Use \(ListAgents.name) to see chats, \
-        ownership, and modes.
+        Sends a message to another existing Squirebot chat and blocks until that \
+        agent's full run completes, then returns its reply. Works on your own \
+        workers (from \(DelegateTask.name) and on the user's own Squirebot \
+        chats — messaging a chat that currently outranks your mode first \
+        requires the user's approval (raised automatically). The target \
+        retains its full history; use this for handoffs, review requests, \
+        follow-up questions, or answering a worker's earlier question. Only \
+        message agents your standing instructions authorize you to contact. \
+        Use \(ListAgents.name) to see chats, ownership, and modes.
         """
 
     private let parameterSchema: [String: Any] = [
@@ -169,7 +169,7 @@ class TalkToAgent: ChatAware, DelegationBubbleAware {
         }
 
         // Visible attribution in the transcript (structured attribution via originActor is added by DelegationRunner.begin).
-        let message = "[Message from Dawson]\n\n" + rawMessage
+        let message = "[Message from \(parent.name)]\n\n" + rawMessage
 
         // --- Ownership regimes ---
         if (target.parentAgentUUID == parent.uuid) {
@@ -187,9 +187,9 @@ class TalkToAgent: ChatAware, DelegationBubbleAware {
                     userUUID: parent.userUUID,
                     type: .permission,
                     prompt: """
-                    Dawson requests to send a message to your chat '\(targetChat.title)', \
-                    which operates at \(target.effectiveMode) — above his current \
-                    \(parent.effectiveMode). If approved, his message enters that chat \
+                    \(parent.name) requests to send a message to your chat '\(targetChat.title)', \
+                    which operates at \(target.effectiveMode) — above \(parent.name)'s current \
+                    \(parent.effectiveMode). If approved, the message enters that chat \
                     with your authority and the Squirebot acts on it under its own mode.
 
                     Message to be sent:

@@ -373,6 +373,9 @@ class Agent: Codable, @unchecked Sendable {
             
             newMessages.append(Message(runUUID: runUUID, originActor: originActor, role: MsgSource.user.name, text: userPrompt))
             
+            // URLs handed to us in the prompt gain fetch provenance (see WebProvenance).
+            WebProvenance.shared.recordURLs(in: userPrompt, agentUUID: uuid)
+            
             let (loopMessages, newState) = try await runInternalLoop(
                 runUUID: runUUID,
                 startMessages: newMessages,
