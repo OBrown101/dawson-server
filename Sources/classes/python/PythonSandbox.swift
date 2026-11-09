@@ -127,7 +127,9 @@ final class PythonSandbox {
 
         var env: [String: String] = [
             // Preserve a minimal, deterministic command path without inheriting host environment variables.
-            "PATH": PythonEnv.pythonHome.appendingPathComponent("bin").path + ":/usr/bin:/bin",
+            // Vendor toolchain bins go last so system tools always win.
+            "PATH": ([PythonEnv.pythonHome.appendingPathComponent("bin").path, "/usr/bin", "/bin"]
+                + DeveloperTools.hostToolchainBinPaths).joined(separator: ":"),
             "HOME": runTemp,
             "TMPDIR": runTemp,
             "PYTHONHOME": PythonEnv.pythonHome.path,
@@ -144,6 +146,15 @@ final class PythonSandbox {
         if let agentScratch {
             env["DAWSON_SCRATCH"] = agentScratch
         }
+        
+        // Gradle: HOME is per-run temp, so without this every run gets a cold
+        // (and, with network denied, unfillable) cache. Keep it in the
+        // workspace so wrapper dists + dependency caches persist across runs.
+        // Daemons would outlive the sandboxed run; forbid them.
+        if let first = writable.first {
+            env["GRADLE_USER_HOME"] = first + "/.gradle"
+        }
+        env["GRADLE_OPTS"] = "-Dorg.gradle.daemon=false"
         
         env.merge(DeveloperTools.hostToolchainEnvironment) { _, pinned in pinned }
         
@@ -179,6 +190,11 @@ extension PythonSandbox {
         let writableRules = writable
             .map { "(allow file-read* file-write* (subpath \"\(sbEscape($0))\"))" }
             .joined(separator: "\n")
+        // Builds inherently execute workspace content (./gradlew, built test
+        // binaries, configure scripts), so writable dirs are also exec-allowed.
+        let writableExecRules = writable
+            .map { "(subpath \"\(sbEscape($0))\")" }
+            .joined(separator: "\n")
         let readOnlyRules = readOnly
             .map { "(allow file-read* (subpath \"\(sbEscape($0))\"))" }
             .joined(separator: "\n")
@@ -187,7 +203,7 @@ extension PythonSandbox {
             .joined(separator: "\n")
         let networkRule = allowNetwork ? "(allow network*)\n(allow system-socket)" : "; network denied by default"
 
-        return """
+        return #"""
         (version 1)
         (deny default)
 
@@ -198,7 +214,8 @@ extension PythonSandbox {
           (subpath "/usr/lib")
           (subpath "/bin")
           (subpath "/usr/bin")
-          \(executableRules))
+          \(executableRules)
+          \(writableExecRules))
         (allow signal (target same-sandbox))
 
         ; --- baseline reads the interpreter/dyld/CoreFoundation need ---
@@ -219,7 +236,20 @@ extension PythonSandbox {
         (allow file-write-data
           (literal "/dev/null"))
         (allow sysctl-read)
-        (allow mach-lookup)
+        ; Named services only — a blanket mach-lookup is the classic Seatbelt
+        ; escape surface once arbitrary native code runs. This set covers what
+        ; libSystem/CF, code-signature checks, and build tools (FSEvents for
+        ; Gradle's file watching) actually need. If a toolchain breaks, find
+        ; the missing service with:  log stream --predicate 'sender == "Sandbox"'
+        (allow mach-lookup
+          (global-name-regex #"^com\.apple\.system\.")
+          (global-name "com.apple.SecurityServer")
+          (global-name "com.apple.trustd")
+          (global-name "com.apple.trustd.agent")
+          (global-name "com.apple.bsd.dirhelper")
+          (global-name "com.apple.logd")
+          (global-name "com.apple.diagnosticd")
+          (global-name "com.apple.FSEvents"))
 
         ; --- workspace + scratch (read/write) ---
         \(writableRules)
@@ -229,7 +259,7 @@ extension PythonSandbox {
 
         ; --- network ---
         \(networkRule)
-        """
+        """#
     }
 
     private static func makeMacProcess(
